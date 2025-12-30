@@ -76,6 +76,12 @@ Rshell是一款开源的golang编写的支持多平台的C2框架，旨在帮助
 
 ### shellcode生成：
 
+生成步骤：
+
+（1）新建监听；
+（2）建立对应监听的windows版的webdelivery；
+（3）在对应的webdelivery的右侧，有shellcode生成的选项。
+
 新增windows的webdelivery后，可以生成stage分阶段的shellcode（体积较小，方便上线）：
 
 ![image-20251215171205269](./assets/image-20251215171205269.png)

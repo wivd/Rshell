@@ -177,18 +177,18 @@ func (c *HTTPClient) startHeartbeatCheck() {
 // GetHttp HTTP GET处理函数
 func GetHttp(w http.ResponseWriter, r *http.Request) {
 	// 记录请求开始时间
-	startTime := time.Now()
+	//startTime := time.Now()
 	requestID := uuid.New().String()
 
 	// 设置响应头
 	w.Header().Set("Content-Type", "application/json")
 
 	// 记录请求信息
-	logger.Info("HTTP GET request started:",
-		"RequestID:", requestID,
-		"RemoteAddr:", r.RemoteAddr,
-		"UserAgent:", r.UserAgent(),
-	)
+	//logger.Info("HTTP GET request started:",
+	//	"RequestID:", requestID,
+	//	"RemoteAddr:", r.RemoteAddr,
+	//	"UserAgent:", r.UserAgent(),
+	//)
 
 	// 确保响应始终返回
 	defer func() {
@@ -201,10 +201,10 @@ func GetHttp(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// 记录请求处理时间
-		logger.Info("HTTP GET request completed:",
-			"RequestID:", requestID,
-			"Duration:", time.Since(startTime),
-		)
+		//logger.Info("HTTP GET request completed:",
+		//	"RequestID:", requestID,
+		//	"Duration:", time.Since(startTime),
+		//)
 	}()
 
 	// 获取Cookie

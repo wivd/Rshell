@@ -5,6 +5,7 @@ import (
 	"BackendTemplate/pkg/connection"
 	"BackendTemplate/pkg/database"
 	"BackendTemplate/pkg/encrypt"
+	"BackendTemplate/pkg/interactive"
 	"BackendTemplate/pkg/logger"
 	"BackendTemplate/pkg/utils"
 	"BackendTemplate/pkg/webhooks"
@@ -782,7 +783,13 @@ WHERE uid = ? AND file_path = ?;
 		md5sign := data[:16]
 		rawData := data[16:]
 		command.VarSocks5Queue.Add(uid, fmt.Sprintf("%x", md5sign), string(rawData))
+	case command.WriteInteractieShell:
+		sessionIDLen := int(binary.BigEndian.Uint32(data[:4]))
 
+		sessionID := string(data[4 : 4+sessionIDLen])
+		output := data[4+sessionIDLen:]
+
+		interactive.SendOutputToSession(uid, sessionID, output)
 	default:
 		return fmt.Errorf("unknown reply type: %d", replyType)
 	}

@@ -21,10 +21,12 @@ func init() {
 // Claims 结构体定义 JWT 的负载
 type Claims struct {
 	Username string `json:"username"`
+	UID      string `json:"uid,omitempty"`     // 新增：用户ID
+	Purpose  string `json:"purpose,omitempty"` // 新增：token用途
 	jwt.RegisteredClaims
 }
 
-// 生成 JWT
+// 生成普通JWT
 func GenerateJWT(username string) (string, error) {
 	expirationTime := time.Now().Add(24 * time.Hour)
 	claims := &Claims{
@@ -36,6 +38,22 @@ func GenerateJWT(username string) (string, error) {
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	return token.SignedString(JwtKey)
 }
+
+// 生成带额外信息的JWT（用于WebSocket等特殊场景）
+func GenerateJWTWithExtras(username, uid, purpose string, expiresIn time.Duration) (string, error) {
+	expirationTime := time.Now().Add(expiresIn)
+	claims := &Claims{
+		Username: username,
+		UID:      uid,
+		Purpose:  purpose,
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(expirationTime),
+		},
+	}
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	return token.SignedString(JwtKey)
+}
+
 func generateSecureKey(length int) ([]byte, error) {
 	key := make([]byte, length)
 	_, err := rand.Read(key)

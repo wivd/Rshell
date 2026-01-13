@@ -184,7 +184,7 @@ func SendCommand(uid string, command string) {
 	}
 
 }
-func SendFileUploadCommand(uid string, byteToSend []byte) {
+func SendCommandBytes(uid string, byteToSend []byte) {
 	switch connection.ClientListenerType[uid] {
 	case "web":
 		command1.CommandQueues.AddCommand(uid, byteToSend)

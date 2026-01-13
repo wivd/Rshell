@@ -9,6 +9,7 @@ require (
 	github.com/aliyun/aliyun-oss-go-sdk v3.0.2+incompatible
 	github.com/fatih/color v1.18.0
 	github.com/gin-gonic/gin v1.10.0
+	github.com/golang-jwt/jwt v3.2.2+incompatible
 	github.com/golang-jwt/jwt/v5 v5.2.1
 	github.com/google/uuid v1.3.0
 	github.com/gorilla/websocket v1.5.3
@@ -16,7 +17,6 @@ require (
 	github.com/mattn/go-sqlite3 v1.14.24
 	github.com/wabzsy/compression v0.0.0-20240604145731-4b6cc6b919b7
 	github.com/xtaci/kcp-go/v5 v5.6.18
-	golang.org/x/crypto v0.32.0
 	xorm.io/xorm v1.3.9
 )
 
@@ -51,6 +51,7 @@ require (
 	github.com/twitchyliquid64/golang-asm v0.15.1 // indirect
 	github.com/ugorji/go/codec v1.2.12 // indirect
 	golang.org/x/arch v0.8.0 // indirect
+	golang.org/x/crypto v0.32.0 // indirect
 	golang.org/x/net v0.25.0 // indirect
 	golang.org/x/sys v0.29.0 // indirect
 	golang.org/x/text v0.21.0 // indirect

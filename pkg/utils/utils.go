@@ -190,7 +190,9 @@ func WriteInt(nInt int) []byte {
 	binary.BigEndian.PutUint32(bBytes, uint32(nInt))
 	return bBytes
 }
-
+func ReadInt(b []byte) uint32 {
+	return binary.BigEndian.Uint32(b)
+}
 func GetSafeFilePath(uid, filePath string) (string, error) {
 	// 验证 UID 格式
 	if uid == "" || strings.Contains(uid, "..") || strings.Contains(uid, "/") || strings.Contains(uid, "\\") {

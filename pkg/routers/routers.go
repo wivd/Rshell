@@ -15,30 +15,44 @@ func NewRouter(embedFS embed.FS, staticFs fs.FS) *gin.Engine {
 	gin.SetMode(gin.ReleaseMode)
 	r := gin.New()
 	//r := gin.Default()
+
 	// 配置 CORS
 	r.Use(middlewares.Cors())
 
-	// 创建嵌入文件系统
+	// 为前端页面和静态资源创建需要Basic认证的路由组
+	webGroup := r.Group("/")
+	webGroup.Use(middlewares.BasicAuthMiddleware())
+	{
+		// 提供静态文件，文件夹是 ./static
+		webGroup.StaticFS("/static/", http.FS(staticFs))
 
-	// 提供静态文件，文件夹是 ./static
-	r.StaticFS("/static/", http.FS(staticFs))
+		// 引入html
+		r.SetHTMLTemplate(template.Must(template.New("").ParseFS(embedFS, "dist/*.html")))
 
-	// 引入html
-	r.SetHTMLTemplate(template.Must(template.New("").ParseFS(embedFS, "dist/*.html")))
-
-	// 处理未匹配的路由
+		// 处理未匹配的路由（前端页面）
+	}
 	r.NoRoute(func(c *gin.Context) {
+		// 手动执行 BasicAuth
+		middlewares.BasicAuthMiddleware()(c)
+		if c.IsAborted() {
+			return
+		}
+
 		c.HTML(http.StatusOK, "index.html", nil)
 	})
-	r.Use(middlewares.BasicAuthMiddleware())
+
+	// API路由组 - 不需要Basic认证
 	a := r.Group("/api")
 	{
-		// 登录
+		// 登录接口 - 不需要任何认证
 		a.POST("/users/login", api.LoginHandler)
+
+		// WebSocket连接端点 - 不需要Basic认证，会在处理器中验证JWT token
+		a.GET("/ws/interactive/:uid/:sessionId", api.InteractiveShell)
 	}
 
 	// 使用 JWT 中间件保护以下路由
-	protected := r.Group("/api")
+	protected := a.Group("/")
 	protected.Use(middlewares.AuthMiddleware())
 
 	users := protected.Group("/users")
@@ -49,6 +63,7 @@ func NewRouter(embedFS embed.FS, staticFs fs.FS) *gin.Engine {
 		// 修改密码
 		users.POST("/user_setting/ChangePassword", api.ChangePasswordHandler)
 	}
+
 	clients := protected.Group("/client")
 	{
 		clients.GET("/clientslist", api.GetClients)
@@ -92,6 +107,7 @@ func NewRouter(embedFS embed.FS, staticFs fs.FS) *gin.Engine {
 		webDelivery.POST("/open", api.OpenWebDelivery)
 		webDelivery.POST("/delete", api.DeleteWebDelivery)
 	}
+
 	socks5 := protected.Group("/socks5")
 	{
 		socks5.GET("/list", api.Socks5List)
@@ -100,6 +116,7 @@ func NewRouter(embedFS embed.FS, staticFs fs.FS) *gin.Engine {
 		socks5.POST("/close", api.Socks5Close)
 		socks5.POST("/delete", api.Socks5Delete)
 	}
+
 	settings := protected.Group("/settings")
 	{
 		settings.GET("/list", api.ListSettings)
@@ -112,7 +129,10 @@ func NewRouter(embedFS embed.FS, staticFs fs.FS) *gin.Engine {
 	{
 		//shellcode.POST("/stageless", api.StageLessShellCodeGen)
 		shellcode.POST("/stage", api.StageShellCodeGen)
-
 	}
+
+	// WebSocket认证token获取端点 - 需要JWT认证
+	protected.GET("/ws/auth/:uid", api.GetWebSocketAuthToken)
+
 	return r
 }

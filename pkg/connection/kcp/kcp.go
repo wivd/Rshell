@@ -249,9 +249,17 @@ func HandleKCPConnection(session *kcp.UDPSession) {
 
 	// 设置KCP会话参数
 	session.SetStreamMode(true)
-	session.SetWindowSize(1024, 1024)
-	session.SetNoDelay(1, 10, 2, 1)
-	session.SetDeadline(time.Now().Add(30 * time.Second)) // 缩短超时时间
+	session.SetReadBuffer(16 * 1024 * 1024)
+	session.SetWriteBuffer(16 * 1024 * 1024)
+
+	// 增大窗口大小，适应大文件高速传输
+	// 发送窗口和接收窗口可以根据带宽调整，建议 4096 起步
+	session.SetWindowSize(4096, 4096)
+
+	// 关键：关闭拥塞控制 (最后一个参数设为 1)
+	// 这样可以保证在有丢包的情况下依然维持高吞吐
+	session.SetNoDelay(1, 20, 2, 1)
+	session.SetDeadline(time.Now().Add(60 * time.Second)) // 缩短超时时间
 
 	// 主消息处理循环
 	for {
@@ -283,10 +291,10 @@ func HandleKCPConnection(session *kcp.UDPSession) {
 			continue
 		}
 
-		if length > 10*1024*1024 { // 限制为10MB
-			logger.Error("KCP message too large:", length, "from:", remoteAddr)
-			break
-		}
+		//if length > 10*1024*1024 { // 限制为10MB
+		//	logger.Error("KCP message too large:", length, "from:", remoteAddr)
+		//	break
+		//}
 
 		// 最小长度检查（至少需要4字节的消息类型）
 		if length < 4 {

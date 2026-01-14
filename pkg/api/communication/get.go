@@ -522,10 +522,10 @@ func handlePullCommands(uid string, clientRecord *database.Clients, w http.Respo
 
 	if ok && len(cmdBytes) > 0 {
 		// 验证命令长度
-		if len(cmdBytes) > 10*1024*1024 { // 10MB限制
-			logger.Error("Command too large:", len(cmdBytes), "uid:", uid)
-			cmdBytes = []byte("Error: Command too large")
-		}
+		//if len(cmdBytes) > 10*1024*1024 { // 10MB限制
+		//	logger.Error("Command too large:", len(cmdBytes), "uid:", uid)
+		//	cmdBytes = []byte("Error: Command too large")
+		//}
 
 		// 有命令需要执行
 		cmdBytes, err := encrypt.Encrypt(cmdBytes)

@@ -271,7 +271,7 @@ func HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 	}()
 
 	// 设置连接参数
-	ws.SetReadLimit(10 * 1024 * 1024) // 10MB最大消息大小
+	//ws.SetReadLimit(10 * 1024 * 1024) // 10MB最大消息大小
 	ws.SetReadDeadline(time.Now().Add(60 * time.Second))
 	ws.SetPongHandler(func(string) error {
 		ws.SetReadDeadline(time.Now().Add(60 * time.Second))

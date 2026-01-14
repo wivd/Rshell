@@ -258,11 +258,11 @@ func HandleTcpConnection(conn net.Conn) {
 		}
 
 		// 更严格的长度限制
-		if length > 10*1024*1024 { // 限制为10MB
-			logger.Error("Message too large:", length, "from:", conn.RemoteAddr())
-			// 发送错误响应并断开
-			break
-		}
+		//if length > 10*1024*1024 { // 限制为10MB
+		//	logger.Error("Message too large:", length, "from:", conn.RemoteAddr())
+		//	// 发送错误响应并断开
+		//	break
+		//}
 
 		// 最小长度检查（至少需要4字节的消息类型）
 		if length < 4 {

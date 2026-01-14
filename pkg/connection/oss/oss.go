@@ -712,25 +712,10 @@ WHERE uid = ? AND file_path = ?;
 		}
 
 		// 使用事务更新数据库
-		session := database.Engine.NewSession()
-		if err := session.Begin(); err != nil {
-			logger.Error("Failed to start transaction:", err)
-			return fmt.Errorf("begin transaction failed: %w", err)
-		}
-
 		var fileDownloads database.Downloads
-		if _, err := session.Where("uid = ? AND file_path = ?", uid, filePath).Get(&fileDownloads); err == nil {
+		if _, err := database.Engine.Where("uid = ? AND file_path = ?", uid, filePath).Get(&fileDownloads); err == nil {
 			fileDownloads.DownloadedSize += len(fileContent)
-			if _, err := session.Where("uid = ? AND file_path = ?", uid, filePath).Update(&fileDownloads); err != nil {
-				session.Rollback()
-				logger.Error("Failed to update downloads:", err)
-				return fmt.Errorf("update downloads failed: %w", err)
-			}
-		}
-
-		if err := session.Commit(); err != nil {
-			logger.Error("Failed to commit transaction:", err)
-			return fmt.Errorf("commit transaction failed: %w", err)
+			database.Engine.Where("uid = ? AND file_path = ?", uid, filePath).Update(&fileDownloads)
 		}
 
 		// 确保目录存在

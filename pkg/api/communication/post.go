@@ -76,7 +76,7 @@ func PostHttp(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	metainfo, err := encrypt.Decrypt(tmpMetainfo)
+	metainfo, err := encrypt.DecryptNormal(tmpMetainfo)
 	if err != nil {
 		logger.Error("Decrypt failed:", err)
 		w.WriteHeader(http.StatusBadRequest)
@@ -141,7 +141,7 @@ func PostHttp(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 第一次解密
-	dataBytes, err = encrypt.Decrypt(dataBytes)
+	dataBytes, err = encrypt.Decrypt(dataBytes, uid)
 	if err != nil {
 		logger.Error("First decrypt failed:", err)
 		w.WriteHeader(http.StatusBadRequest)
@@ -152,7 +152,7 @@ func PostHttp(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 第二次解密
-	dataBytes, err = encrypt.Decrypt(dataBytes)
+	dataBytes, err = encrypt.Decrypt(dataBytes, uid)
 	if err != nil {
 		logger.Error("Second decrypt failed:", err)
 		w.WriteHeader(http.StatusBadRequest)

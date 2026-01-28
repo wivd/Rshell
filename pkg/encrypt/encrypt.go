@@ -1,6 +1,7 @@
 package encrypt
 
 import (
+	"BackendTemplate/pkg/database"
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/md5"
@@ -8,6 +9,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
+	"golang.org/x/crypto/curve25519"
 	"io"
 	r "math/rand"
 	"strconv"
@@ -62,7 +64,7 @@ func decryptAES(ciphertext []byte, key []byte) ([]byte, error) {
 	return ciphertext, nil
 }
 
-func Encrypt(data []byte) ([]byte, error) {
+func EncryptNormal(data []byte) ([]byte, error) {
 	key := generateKey()
 	encryptedData, _ := encryptAES([]byte(hex.EncodeToString(data)), key)
 	// key与加密结果放到一起
@@ -70,11 +72,46 @@ func Encrypt(data []byte) ([]byte, error) {
 	return keyAndData, nil
 }
 
-func Decrypt(data []byte) ([]byte, error) {
+func DecryptNormal(data []byte) ([]byte, error) {
 	if len(data) > 0 {
 		key := data[:32]
 		encryptedData := data[32:]
 		decryptedData, _ := decryptAES(encryptedData, key)
+		plainData, _ := hex.DecodeString(string(decryptedData))
+		return plainData, nil
+	}
+	return nil, nil
+}
+
+func Encrypt(data []byte, uid string) ([]byte, error) {
+	var client database.Clients
+	database.Engine.Where("uid = ?", uid).Get(&client)
+	pubkeyBytes, _ := base64.StdEncoding.DecodeString(client.PublicKey)
+
+	var pubKey [32]byte
+	copy(pubKey[:], pubkeyBytes[:32])
+	key, _ := ComputeSharedSecret(Key.Private, pubKey)
+
+	//key := generateKey()
+	encryptedData, _ := encryptAES([]byte(hex.EncodeToString(data)), key[:])
+	// key与加密结果放到一起
+	//keyAndData := append(key, encryptedData...)
+	return encryptedData, nil
+}
+
+func Decrypt(data []byte, uid string) ([]byte, error) {
+	if len(data) > 0 {
+		var client database.Clients
+		database.Engine.Where("uid = ?", uid).Get(&client)
+		pubkeyBytes, _ := base64.StdEncoding.DecodeString(client.PublicKey)
+
+		var pubKey [32]byte
+		copy(pubKey[:], pubkeyBytes[:32])
+		key, _ := ComputeSharedSecret(Key.Private, pubKey)
+
+		//key := data[:32]
+		//encryptedData := data[32:]
+		decryptedData, _ := decryptAES(data, key[:])
 		plainData, _ := hex.DecodeString(string(decryptedData))
 		return plainData, nil
 	}
@@ -135,4 +172,61 @@ func GenRandomBytes() []byte {
 		return nil
 	}
 	return b
+}
+
+type KeyPair struct {
+	Public  [32]byte
+	Private [32]byte
+}
+
+var Key KeyPair
+
+func GenerateKeyPair() {
+	database.Engine.Where("1=1")
+	count, _ := database.Engine.Count(&database.Key{})
+	if count != 0 {
+		var key database.Key
+		database.Engine.Where("1=1").Get(&key)
+		prikeyBytes, _ := base64.StdEncoding.DecodeString(key.PrivateKey)
+		pubkeyBytes, _ := base64.StdEncoding.DecodeString(key.PublicKey)
+		var prikey, pubkey [32]byte
+		copy(prikey[:], prikeyBytes[:32])
+		copy(pubkey[:], pubkeyBytes[:32])
+		Key = KeyPair{
+			Public:  pubkey,
+			Private: prikey,
+		}
+		return
+	}
+	var publicKey, privateKey [32]byte
+
+	// 生成私钥（需要随机数）
+	if _, err := rand.Read(privateKey[:]); err != nil {
+		return
+	}
+
+	// 计算公钥
+	curve25519.ScalarBaseMult(&publicKey, &privateKey)
+	database.Engine.Where("1 = 1").Delete(&database.Key{})
+	database.Engine.Insert(&database.Key{
+		PublicKey:  base64.StdEncoding.EncodeToString(publicKey[:]),
+		PrivateKey: base64.StdEncoding.EncodeToString(privateKey[:]),
+	})
+	Key = KeyPair{
+		Public:  publicKey,
+		Private: privateKey,
+	}
+	return
+}
+
+// 计算共享密钥
+func ComputeSharedSecret(privateKey, peerPublicKey [32]byte) ([32]byte, error) {
+	sharedSecret, err := curve25519.X25519(privateKey[:], peerPublicKey[:])
+	if err != nil {
+		return [32]byte{}, fmt.Errorf("failed to compute shared secret: %w", err)
+	}
+
+	var result [32]byte
+	copy(result[:], sharedSecret)
+	return result, nil
 }

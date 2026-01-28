@@ -9,6 +9,7 @@ import (
 	"BackendTemplate/pkg/logger"
 	"BackendTemplate/pkg/utils"
 	"BackendTemplate/pkg/webhooks"
+	"encoding/base64"
 	"encoding/binary"
 	"fmt"
 	"os"
@@ -243,6 +244,7 @@ func (c *OSSClient) pollMessages() ([]string, error) {
 }
 
 // processMessages 处理消息
+// processMessages 处理消息（保持顺序）
 func (c *OSSClient) processMessages(keys []string) {
 	defer func() {
 		if r := recover(); r != nil {
@@ -250,53 +252,64 @@ func (c *OSSClient) processMessages(keys []string) {
 		}
 	}()
 
-	// 使用工作池处理消息
-	semaphore := make(chan struct{}, c.Config.MaxWorkers)
-	var wg sync.WaitGroup
+	// 按 UID 分组消息
+	uidMessages := make(map[string][]string)
 
 	for _, key := range keys {
 		if !c.IsRunning.Load() {
 			break
 		}
 
+		// 从 key 中提取 UID（需要根据你的 key 格式调整）
+		// 假设 key 格式为: "client_<timestamp>_<uid>_..."
+		parts := strings.Split(key, "_")
+		if len(parts) >= 3 {
+			uid := parts[2]
+			uidMessages[uid] = append(uidMessages[uid], key)
+		} else {
+			// 如果不能提取 UID，按普通顺序处理
+			uidMessages[""] = append(uidMessages[""], key)
+		}
+	}
+
+	// 为每个 UID 创建一个处理协程
+	var wg sync.WaitGroup
+	for uid, messages := range uidMessages {
 		wg.Add(1)
-		semaphore <- struct{}{}
 
-		go func(k string) {
+		go func(uid string, msgKeys []string) {
 			defer wg.Done()
-			defer func() { <-semaphore }()
 
-			defer func() {
-				if r := recover(); r != nil {
-					logger.Error("OSS message processing panic recovered:", r, "key:", k)
-					c.Stats.mu.Lock()
-					c.Stats.FailedMessages++
-					c.Stats.LastError = fmt.Sprintf("panic: %v", r)
-					c.Stats.mu.Unlock()
-				}
-			}()
+			// 对每个 UID 的消息按时间排序
+			sort.Strings(msgKeys)
 
-			// 重试机制
-			for attempt := 0; attempt <= c.Config.RetryCount; attempt++ {
-				if err := c.processSingleMessage(k); err == nil {
-					c.Stats.mu.Lock()
-					c.Stats.ProcessedMessages++
-					c.Stats.mu.Unlock()
+			// 串行处理同一个 UID 的消息
+			for _, key := range msgKeys {
+				if !c.IsRunning.Load() {
 					break
-				} else {
-					if attempt == c.Config.RetryCount {
+				}
+
+				// 处理单个消息
+				for attempt := 0; attempt <= c.Config.RetryCount; attempt++ {
+					if err := c.processSingleMessage(key); err == nil {
 						c.Stats.mu.Lock()
-						c.Stats.FailedMessages++
-						c.Stats.LastError = err.Error()
+						c.Stats.ProcessedMessages++
 						c.Stats.mu.Unlock()
-						logger.Error("Failed to process message after retries:", k, "Error:", err)
+						break
 					} else {
-						logger.Warn("Retry processing message:", k, "Attempt:", attempt+1, "Error:", err)
-						time.Sleep(time.Duration(attempt+1) * time.Second)
+						if attempt == c.Config.RetryCount {
+							c.Stats.mu.Lock()
+							c.Stats.FailedMessages++
+							c.Stats.LastError = err.Error()
+							c.Stats.mu.Unlock()
+							logger.Error("Failed to process message after retries:", key, "Error:", err)
+						} else {
+							time.Sleep(time.Duration(attempt+1) * time.Second)
+						}
 					}
 				}
 			}
-		}(key)
+		}(uid, messages)
 	}
 
 	wg.Wait()
@@ -365,7 +378,7 @@ func handleFirstBlood(msg []byte) error {
 		return fmt.Errorf("decode base64 failed: %w", err)
 	}
 
-	metainfo, err := encrypt.Decrypt(tmpMetainfo)
+	metainfo, err := encrypt.DecryptNormal(tmpMetainfo)
 	if err != nil {
 		return fmt.Errorf("decrypt failed: %w", err)
 	}
@@ -396,7 +409,8 @@ func handleFirstBlood(msg []byte) error {
 		if len(metainfo) < 9 {
 			return fmt.Errorf("metainfo insufficient for parsing: %d bytes", len(metainfo))
 		}
-
+		publicKey := metainfo[:32]
+		metainfo = metainfo[32:]
 		processID := binary.BigEndian.Uint32(metainfo[:4])
 		flag := int(metainfo[4])
 
@@ -469,6 +483,7 @@ func handleFirstBlood(msg []byte) error {
 			Sleep:      "5",
 			Online:     "1",
 			Color:      "",
+			PublicKey:  base64.StdEncoding.EncodeToString(publicKey[:]),
 		}
 
 		if _, err := session.Insert(&c); err != nil {
@@ -547,7 +562,7 @@ func handleOtherMsg(msg []byte) error {
 		return fmt.Errorf("decode base64 failed: %w", err)
 	}
 
-	metainfo, err := encrypt.Decrypt(tmpMetainfo)
+	metainfo, err := encrypt.DecryptNormal(tmpMetainfo)
 	if err != nil {
 		return fmt.Errorf("decrypt failed: %w", err)
 	}
@@ -564,12 +579,12 @@ func handleOtherMsg(msg []byte) error {
 		return fmt.Errorf("decode base64 failed: %w", err)
 	}
 
-	dataBytes, err = encrypt.Decrypt(dataBytes)
+	dataBytes, err = encrypt.Decrypt(dataBytes, uid)
 	if err != nil {
 		return fmt.Errorf("first decrypt failed: %w", err)
 	}
 
-	dataBytes, err = encrypt.Decrypt(dataBytes)
+	dataBytes, err = encrypt.Decrypt(dataBytes, uid)
 	if err != nil {
 		return fmt.Errorf("second decrypt failed: %w", err)
 	}

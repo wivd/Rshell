@@ -2,6 +2,7 @@ package main
 
 import (
 	"BackendTemplate/pkg/database"
+	"BackendTemplate/pkg/encrypt"
 	"BackendTemplate/pkg/logger"
 	"BackendTemplate/pkg/routers"
 	"BackendTemplate/pkg/utils"
@@ -25,6 +26,7 @@ func main() {
 	}
 	database.ConnectDateBase()
 	defer database.Engine.Close()
+	encrypt.GenerateKeyPair()
 
 	database.Engine.Update(&database.Clients{Online: "2"})
 	database.Engine.Update(&database.Listener{Status: 2})

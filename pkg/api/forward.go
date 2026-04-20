@@ -1,12 +1,21 @@
-// api/forward.go
 package api
+
+/*
+修改说明：
+1. api/forward-connection 添加目标地址规范化与校验逻辑。
+2. 拒绝 localhost、回环地址、私网地址、未指定地址、组播地址、链路本地地址。
+3. 对域名先做解析，只要解析结果指向受限地址就拒绝连接。
+
+*/
 
 import (
 	"Rshell/pkg/connection/tcp"
 	"Rshell/pkg/connection/websocket"
 	"Rshell/pkg/logger"
 	"fmt"
+	"net"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -26,28 +35,22 @@ func ForwardConnect(c *gin.Context) {
 
 	switch forward.Type {
 	case "websocket":
-		// 验证地址格式
-		if forward.Address == "" {
-			c.JSON(http.StatusOK, gin.H{"status": 400, "data": "address is required"})
+		safeAddress, err := normalizeForwardAddress(forward.Address, "")
+		if err != nil {
+			c.JSON(http.StatusOK, gin.H{"status": 400, "data": err.Error()})
 			return
 		}
 
-		// 确保地址有正确的协议前缀
-
-		// 配置正向连接
 		config := &websocket.ForwardConfig{
-			ServerURL:   "ws://" + forward.Address + "/ws",
-			Socks5Proxy: forward.Proxy, // 使用传入的代理地址
+			ServerURL:   "ws://" + safeAddress + "/ws",
+			Socks5Proxy: forward.Proxy,
 			Timeout:     30 * time.Second,
 			MaxRetries:  5,
 			RetryDelay:  10 * time.Second,
 			Reconnect:   true,
-			Headers:     map[string]string{
-				//"User-Agent": "Rshell-Forward-Client/1.0",
-			},
+			Headers:     map[string]string{},
 		}
 
-		// 启动正向客户端
 		client, err := websocket.StartForwardClient(config)
 		if err != nil {
 			logger.Error("Failed to start forward client:", err)
@@ -58,7 +61,6 @@ func ForwardConnect(c *gin.Context) {
 			return
 		}
 
-		// 返回连接信息
 		c.JSON(http.StatusOK, gin.H{
 			"status": 200,
 			"data": gin.H{
@@ -69,35 +71,30 @@ func ForwardConnect(c *gin.Context) {
 			},
 		})
 
-		// 异步监控连接状态
 		go monitorForwardConnection(client.UID, "websocket")
 	case "tcp":
-		// TCP正向连接
 		handleTCPForward(forward.Address, forward.Proxy, c)
 	default:
 		c.JSON(http.StatusOK, gin.H{"status": 400, "data": "unsupported connection type"})
 	}
 }
 
-// handleTCPForward 处理TCP正向连接
 func handleTCPForward(address, proxy string, c *gin.Context) {
-	// 验证TCP地址格式（host:port）
-	if !strings.Contains(address, ":") {
-		// 如果没有端口，添加默认端口
-		address = address + ":8080"
+	safeAddress, err := normalizeForwardAddress(address, "8080")
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{"status": 400, "data": err.Error()})
+		return
 	}
 
-	// 配置TCP正向连接
 	config := &tcp.TCPForwardConfig{
-		ServerAddress: address,
-		Socks5Proxy:   proxy, // 使用传入的代理地址
+		ServerAddress: safeAddress,
+		Socks5Proxy:   proxy,
 		Timeout:       30 * time.Second,
 		MaxRetries:    5,
 		RetryDelay:    10 * time.Second,
 		Reconnect:     true,
 	}
 
-	// 启动TCP正向客户端
 	client, err := tcp.StartTCPForwardClient(config)
 	if err != nil {
 		logger.Error("Failed to start TCP forward client:", err)
@@ -108,7 +105,6 @@ func handleTCPForward(address, proxy string, c *gin.Context) {
 		return
 	}
 
-	// 返回连接信息
 	c.JSON(http.StatusOK, gin.H{
 		"status": 200,
 		"data": gin.H{
@@ -120,16 +116,84 @@ func handleTCPForward(address, proxy string, c *gin.Context) {
 		},
 	})
 
-	// 异步监控连接状态
 	go monitorForwardConnection(client.UID, "tcp")
 }
 
-// monitorForwardConnection 监控正向连接状态
+func normalizeForwardAddress(address, defaultPort string) (string, error) {
+	address = strings.TrimSpace(address)
+	if address == "" {
+		return "", fmt.Errorf("address is required")
+	}
+
+	if strings.ContainsAny(address, "/?#") {
+		return "", fmt.Errorf("invalid address format")
+	}
+
+	host, port, err := net.SplitHostPort(address)
+	if err != nil {
+		if defaultPort == "" || !strings.Contains(err.Error(), "missing port in address") {
+			return "", fmt.Errorf("invalid address format, expected host:port")
+		}
+		host = address
+		port = defaultPort
+	}
+
+	host = strings.Trim(host, "[]")
+	if host == "" {
+		return "", fmt.Errorf("host is required")
+	}
+
+	portNum, err := strconv.Atoi(port)
+	if err != nil || portNum < 1 || portNum > 65535 {
+		return "", fmt.Errorf("invalid port")
+	}
+
+	if err := validateForwardHost(host); err != nil {
+		return "", err
+	}
+
+	return net.JoinHostPort(host, strconv.Itoa(portNum)), nil
+}
+
+func validateForwardHost(host string) error {
+	normalizedHost := strings.ToLower(strings.TrimSpace(host))
+	if normalizedHost == "localhost" {
+		return fmt.Errorf("restricted target host")
+	}
+
+	if ip := net.ParseIP(normalizedHost); ip != nil {
+		if isRestrictedForwardIP(ip) {
+			return fmt.Errorf("restricted target address")
+		}
+		return nil
+	}
+
+	ips, err := net.LookupIP(normalizedHost)
+	if err != nil || len(ips) == 0 {
+		return fmt.Errorf("failed to resolve target host")
+	}
+
+	for _, ip := range ips {
+		if isRestrictedForwardIP(ip) {
+			return fmt.Errorf("target resolves to restricted address")
+		}
+	}
+
+	return nil
+}
+
+func isRestrictedForwardIP(ip net.IP) bool {
+	return ip.IsLoopback() ||
+		ip.IsPrivate() ||
+		ip.IsUnspecified() ||
+		ip.IsMulticast() ||
+		ip.IsLinkLocalUnicast() ||
+		ip.IsLinkLocalMulticast()
+}
+
 func monitorForwardConnection(uid, connType string) {
-	// 等待一段时间检查连接状态
 	time.Sleep(3 * time.Second)
 
-	// 根据连接类型检查是否还是临时UID
 	if connType == "websocket" {
 		if strings.HasPrefix(uid, "temp_") {
 			logger.Warn("WebSocket forward connection still using temporary UID after 3 seconds:", uid)

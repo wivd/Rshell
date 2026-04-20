@@ -1,5 +1,11 @@
 package api
 
+/*
+修改说明：
+1.  ChangePasswordHandler 添加用户存在判断。
+2. LoginHandler 添加用户存在判断。
+*/
+
 import (
 	"Rshell/pkg/common"
 	"Rshell/pkg/database"
@@ -19,23 +25,29 @@ func LoginHandler(c *gin.Context) {
 		return
 	}
 
-	// 假设用户名和密码验证成功
 	var users database.Users
-	if database.Engine.Where("username = ?", loginData.Username).Get(&users); users.Password == loginData.Password {
-		token, err := common.GenerateJWT(loginData.Username)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not generate token"})
-			return
-		}
-		c.JSON(http.StatusOK, gin.H{"code": 200, "data": gin.H{
-			"token":       token,
-			"permissions": 1, // 示例：1表示管理员权限
-			"refresh":     "mock-refresh-token",
-			"username":    loginData.Username,
-		}})
-	} else {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid credentials"})
+	has, err := database.Engine.Where("username = ?", loginData.Username).Get(&users)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		return
 	}
+
+	if !has || users.Password != loginData.Password {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid credentials"})
+		return
+	}
+
+	token, err := common.GenerateJWT(loginData.Username)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not generate token"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"code": 200, "data": gin.H{
+		"token":       token,
+		"permissions": 1, // 示例：1表示管理员权限
+		"refresh":     "mock-refresh-token",
+		"username":    loginData.Username,
+	}})
 }
 
 // 注销处理函数
@@ -52,15 +64,33 @@ func ChangePasswordHandler(c *gin.Context) {
 	}
 	if err := c.ShouldBind(&passwordData); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid input"})
+		return
 	}
 
 	// 处理密码修改逻辑
 	if passwordData.OldPassword != passwordData.NewPassword {
 		username := c.MustGet("username").(string)
 		var users database.Users
-		if database.Engine.Where("username = ?", username).Get(&users); users.Password == passwordData.OldPassword {
+		has, err := database.Engine.Where("username = ?", username).Get(&users)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+			return
+		}
+		if !has {
+			c.JSON(http.StatusOK, gin.H{"code": 400, "message": "Password changed failed"})
+			return
+		}
+		if users.Password == passwordData.OldPassword {
 			users.Password = passwordData.NewPassword
-			database.Engine.Where("username = ?", username).Update(&users)
+			affected, err := database.Engine.Where("username = ?", username).Cols("password").Update(&users)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+				return
+			}
+			if affected != 1 {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Password update did not persist"})
+				return
+			}
 			c.JSON(http.StatusOK, gin.H{"code": 200, "message": "Password changed successfully"})
 		} else {
 			c.JSON(http.StatusOK, gin.H{"code": 400, "message": "Password changed failed"})

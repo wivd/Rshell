@@ -2,8 +2,8 @@ package database
 
 import (
 	"Rshell/pkg/logger"
+	"crypto/rand"
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -88,12 +88,32 @@ type Key struct {
 	PrivateKey string
 }
 
+func generateInitialAdminPassword(length int) (string, error) {
+	if length <= 0 {
+		length = 20
+	}
+
+	const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%^&*_-+="
+	buf := make([]byte, length)
+	randomBytes := make([]byte, length)
+
+	if _, err := rand.Read(randomBytes); err != nil {
+		return "", fmt.Errorf("failed to generate random password: %v", err)
+	}
+
+	for i := range buf {
+		buf[i] = alphabet[int(randomBytes[i])%len(alphabet)]
+	}
+
+	return string(buf), nil
+}
+
 func ConnectDateBase() {
 	var err error
 	// 获取当前程序所在目录
 	exePath, err := os.Executable()
 	if err != nil {
-		log.Fatalf("获取程序路径失败: %v", err)
+		logger.Fatalf("获取程序路径失败: %v", err)
 	}
 
 	// 获取程序所在目录
@@ -104,19 +124,28 @@ func ConnectDateBase() {
 
 	Engine, err = xorm.NewEngine("sqlite", DatabaseName)
 	if err != nil {
-		log.Fatalf("连接sqlite数据库失败: %v", err)
+		logger.Fatalf("连接sqlite数据库失败: %v", err)
 	}
 	err = Engine.Sync2(new(Users), new(Clients), new(Notes), new(Shell), new(Downloads), new(Listener), new(WebDelivery), new(Socks5), new(Settings), new(Key))
 	if err != nil {
-		log.Fatalf("初始化数据库失败: %v", err)
+		logger.Fatalf("初始化数据库失败: %v", err)
 	}
 	var user Users
 	exists, err := Engine.Where("username = ?", "admin").Get(&user)
+	if err != nil {
+		logger.Fatalf("查询 admin 用户失败: %v", err)
+	}
 	if !exists {
+		initialPassword, err := generateInitialAdminPassword(20)
+		if err != nil {
+			logger.Fatalf("生成初始 admin 密码失败: %v", err)
+		}
+
 		// 如果不存在 admin 用户，插入默认的 admin 用户
+		// 当 admin 用户不存在时，改为生成随机初始密码并写入数据库。
 		defaultUser := &Users{
 			Username: "admin",
-			Password: "admin123",
+			Password: initialPassword,
 			//Email:       "admin@example.com",
 			//Phone:       "1234567890",
 			//Permissions: 1,
@@ -127,6 +156,10 @@ func ConnectDateBase() {
 			logger.Error(fmt.Sprintf("插入默认 admin 用户失败: %v", err))
 			os.Exit(0)
 		}
+
+		logger.Warn("admin user not found,init......")
+		logger.Warnf("account: %s", "admin")
+		logger.Warnf("password: %s", initialPassword)
 	}
 	var Setting Settings
 	exists, err = Engine.Where("name=?", "wecom").Get(&Setting)

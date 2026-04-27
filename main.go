@@ -6,6 +6,7 @@ import (
 	"Rshell/pkg/logger"
 	"Rshell/pkg/routers"
 	"Rshell/pkg/utils"
+	"Rshell/pkg/mcp"
 	"embed"
 	"flag"
 	"io/fs"
@@ -18,6 +19,15 @@ var embedFS embed.FS
 
 func main() {
 	utils.InitFunction()
+
+	if len(os.Args) >= 2 && os.Args[1] == "mcp" {
+		database.ConnectDateBase()
+		defer database.Engine.Close()
+		mcp.InitMCP()
+		mcp.StartStdioServer()
+		return
+	}
+
 	var bindPort = flag.Int("p", 8089, "Specify alternate port")
 	flag.Parse()
 	if *bindPort > 65535 || *bindPort < 0 {
@@ -28,6 +38,7 @@ func main() {
 	defer database.Engine.Close()
 	encrypt.GenerateKeyPair()
 
+	mcp.InitMCP()
 	database.Engine.Update(&database.Clients{Online: "2"})
 	database.Engine.Update(&database.Listener{Status: 2})
 	database.Engine.Update(&database.Socks5{Status: 2})

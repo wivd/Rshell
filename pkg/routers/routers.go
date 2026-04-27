@@ -159,5 +159,7 @@ func NewRouter(embedFS embed.FS, staticFs fs.FS) *gin.Engine {
 		mcpGroup.POST("/message", mcp.HandleMessage)
 	}
 
+	mcp.GlobalEngine = r
+
 	return r
 }

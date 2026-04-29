@@ -209,3 +209,9 @@ windows内存执行 支持Execute Assembly(.net程序内存执行)、Inline Bin(
 ![fdd77420-65d1-4ba7-964a-8978a9a1c04d](../assets/fdd77420-65d1-4ba7-964a-8978a9a1c04d.png)
 
 ![981d7007-cb0a-4118-afbd-3596cd9c991f](../assets/981d7007-cb0a-4118-afbd-3596cd9c991f.png)
+
+## 上线提醒
+
+支持多种上线提醒方式：
+
+![image-20260429154521210](../assets/image-20260429154521210.png)

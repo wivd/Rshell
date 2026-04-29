@@ -51,7 +51,7 @@ Rshell是一款开源的golang编写的支持多平台的C2框架，旨在帮助
 - [ ] 笔记功能增加图床
 - [ ] 笔记md格式所见即所得
 - [ ] 一键信息收集，收集信息内容直接保存到笔记中
-- [ ] 丰富上线提醒的方式（邮箱、钉钉、telegram等）
+- [x] 丰富上线提醒的方式（邮箱、钉钉、telegram等）
 - [x] 增加正向上线方式 [#26](https://github.com/Rubby2001/Rshell---A-Cross-Platform-C2/issues/26)
 - [x] 增加插件模块  [#9](https://github.com/Rubby2001/Rshell---A-Cross-Platform-C2/issues/9)
 - [x] 增加开机启动等插件是否合适  [#9](https://github.com/Rubby2001/Rshell---A-Cross-Platform-C2/issues/9) (可借助插件模块实现)

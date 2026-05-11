@@ -103,6 +103,25 @@ type Screenshots struct {
 	FilePath  string
 	CreatedAt int64
 }
+type Credentials struct {
+	Id        int64  `xorm:"pk autoincr" json:"id"`
+	Uid       string `json:"uid"`
+	Target    string `json:"target"`
+	Username  string `json:"username"`
+	Secret    string `json:"secret"`
+	CredType  string `json:"cred_type"`
+	Source    string `json:"source"`
+	Notes     string `json:"notes"`
+	CreatedAt int64  `json:"created_at"`
+}
+type CredentialDumps struct {
+	Id        int64  `xorm:"pk autoincr" json:"id"`
+	Uid       string `json:"uid"`
+	FileName  string `json:"fileName"`
+	FilePath  string `json:"filePath"`
+	FileSize  int64  `json:"fileSize"`
+	CreatedAt int64  `json:"createdAt"`
+}
 
 func generateInitialAdminPassword(length int) (string, error) {
 	if length <= 0 {
@@ -142,7 +161,7 @@ func ConnectDateBase() {
 	if err != nil {
 		logger.Fatalf("连接sqlite数据库失败: %v", err)
 	}
-	err = Engine.Sync2(new(Users), new(Clients), new(Notes), new(Shell), new(Downloads), new(Listener), new(WebDelivery), new(Socks5), new(Settings), new(Key), new(Plugin), new(Screenshots))
+	err = Engine.Sync2(new(Users), new(Clients), new(Notes), new(Shell), new(Downloads), new(Listener), new(WebDelivery), new(Socks5), new(Settings), new(Key), new(Plugin), new(Screenshots), new(Credentials), new(CredentialDumps))
 	if err != nil {
 		logger.Fatalf("初始化数据库失败: %v", err)
 	}

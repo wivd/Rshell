@@ -788,8 +788,10 @@ WHERE uid = ? AND file_path = ?;
 		md5sign := data[:16]
 		rawData := data[16:]
 		command.VarSocks5Queue.Add(uid, fmt.Sprintf("%x", md5sign), string(rawData))
-	case command.SCREENSHOT:
-		if len(data) == 0 {
+	case command.DUMP_DATA:
+		database.HandleDumpData(uid, data)
+		break
+	case command.SCREENSHOT:		if len(data) == 0 {
 			logger.Error("OSS empty screenshot data")
 			break
 		}

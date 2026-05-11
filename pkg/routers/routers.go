@@ -154,6 +154,15 @@ func NewRouter(embedFS embed.FS, staticFs fs.FS) *gin.Engine {
 
 	protected.POST("/forward-connection", api.ForwardConnect)
 
+	credentials := protected.Group("/credentials")
+	{
+		credentials.GET("/list", api.ListCredentials)
+		credentials.POST("/add", api.AddCredential)
+		credentials.POST("/delete", api.DeleteCredential)
+		credentials.GET("/dumps", api.ListCredentialDumps)
+		credentials.GET("/dump/download", api.DownloadCredentialDump)
+	}
+
 	// MCP Endpoints (Protected by JWT AuthMiddleware)
 	mcpGroup := protected.Group("/mcp")
 	mcpGroup.Use(mcp.MCPEnabledMiddleware())

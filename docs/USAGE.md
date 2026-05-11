@@ -140,6 +140,72 @@ windows内存执行 支持Execute Assembly(.net程序内存执行)、Inline Bin(
 
 ![image-20260206173424252](../assets/image-20260206173424252.png)
 
+### Getsystem（提权）
+
+支持 6 种提权技术按顺序自动尝试：
+
+| 技术  | 名称                         | 原理                                                         |
+| ----- | ---------------------------- | ------------------------------------------------------------ |
+| **1** | Named Pipe (In Memory/Admin) | 创建命名管道 → 创建 SYSTEM 服务连接管道 → `ImpersonateNamedPipeClient` |
+| **2** | Named Pipe (Dropper/Admin)   | 同技术 1，但通过落地 DLL 执行（需 elevator DLL）             |
+| **3** | Token Duplication            | 启用 `SeDebugPrivilege` → 枚举 SYSTEM 进程 → `DuplicateTokenEx` |
+| **4** | RPCSS Handle Stealing        | 打开 RPCSS 进程 → `NtQueryInformationProcess` 枚举句柄表 → 窃取 SYSTEM Token |
+| **5** | PrintSpooler                 | 创建命名管道 → `RpcRemoteFindFirstPrinterChangeNotification` 触发 spoolsv SYSTEM 连接 |
+| **6** | EfsPotato                    | 创建命名管道 → `EfsRpcEncryptFileSrv` 触发 LSASS/EFS SYSTEM 连接 |
+
+**使用方式**：
+
+```
+getsystem        尝试全部 6 种技术
+getsystem 1      仅测试技术 1（命名管道）
+getsystem 3      仅测试技术 3（Token 复制）
+```
+
+成功获取 SYSTEM 令牌后，后续 `shell` 命令以 SYSTEM 身份执行。
+
+![image-20260511153320820](./assets/image-20260511153320820.png)
+
+
+
+### Mimikatz（凭据窃取）
+
+全自动 LSASS 凭据窃取流程，无需手动交互：
+
+1. 目标执行 `mimikatz` 命令
+2. `MiniDumpWriteDump` 通过回调方式在内存中转储 LSASS
+3. AES-256-GCM 加密后分块回传服务端
+4. 服务端收到后自动解密
+5. 调用 `pypykatz lsa minidump` 解析凭据
+6. 凭据自动存入数据库，前端实时查看
+
+**使用方式**：
+
+```
+mimikatz   一键完成转储 → 回传 → 解密 → 解析 → 入库
+```
+
+**支持提取的凭据类型**：
+
+| 类型      | 来源    | 用途                 |
+| --------- | ------- | -------------------- |
+| NTLM Hash | msv1_0  | 哈希传递攻击（PTH）  |
+| 明文密码  | wdigest | 直接登录             |
+| 明文密码  | credman | 凭据管理器保存的密码 |
+
+**前提条件**：
+
+服务端需安装 pypykatz：
+
+```bash
+pip install pypykatz
+```
+
+![image-20260511154032263](./assets/image-20260511154032263.png)
+
+![image-20260511153933605](./assets/image-20260511153933605.png)
+
+
+
 ## 插件管理
 
 新增插件：

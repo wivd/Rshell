@@ -42,9 +42,9 @@ Rshell是一款开源的golang编写的支持多平台的C2框架，旨在帮助
 
 **目前有一些待实现的改进想法，将不定期更新。如果你有好的建议或想参与开发，欢迎提交 PR 或开 issue 讨论。**
 
-- [ ] 一键退出所有终端
+- [x] 一键退出所有终端
 - [ ] 文件下载增加中断功能  [#21](https://github.com/Rubby2001/Rshell---A-Cross-Platform-C2/issues/21)
-- [ ] 截图功能  [#9](https://github.com/Rubby2001/Rshell---A-Cross-Platform-C2/issues/9)
+- [x] 截图功能  [#9](https://github.com/Rubby2001/Rshell---A-Cross-Platform-C2/issues/9)
 - [x] linux内存执行
 - [x] web托管bash、bat脚本  [#24](https://github.com/Rubby2001/Rshell---A-Cross-Platform-C2/issues/24)  (合并到内存执行)
 - [x] 增加MCP功能

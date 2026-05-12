@@ -183,12 +183,13 @@ func validateForwardHost(host string) error {
 }
 
 func isRestrictedForwardIP(ip net.IP) bool {
-	return ip.IsLoopback() ||
-		ip.IsPrivate() ||
-		ip.IsUnspecified() ||
-		ip.IsMulticast() ||
-		ip.IsLinkLocalUnicast() ||
-		ip.IsLinkLocalMulticast()
+	return false
+	// ip.IsLoopback() ||
+	// 	// ip.IsPrivate() ||
+	// 	ip.IsUnspecified() ||
+	// 	ip.IsMulticast() ||
+	// 	ip.IsLinkLocalUnicast() ||
+	// 	ip.IsLinkLocalMulticast()
 }
 
 func monitorForwardConnection(uid, connType string) {

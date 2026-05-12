@@ -103,16 +103,20 @@ func (fc *TCPForwardConnector) Connect() (*TCPClient, error) {
 	var conn net.Conn
 	var err error
 
-	// 根据配置选择连接方式
+	logger.Info("[DEBUG] TCP Forward connecting to:", fc.Config.ServerAddress)
+
 	if fc.Config.Socks5Proxy != "" {
+		logger.Info("[DEBUG] TCP Forward using SOCKS5 proxy:", fc.Config.Socks5Proxy)
 		conn, err = fc.connectWithProxy()
 	} else {
 		conn, err = fc.connectDirect()
 	}
 
 	if err != nil {
+		logger.Error("[DEBUG] TCP Forward connect FAILED:", err)
 		return nil, err
 	}
+	logger.Info("[DEBUG] TCP Forward connected to:", fc.Config.ServerAddress)
 
 	// 获取对方的IP地址
 	remoteAddr := fc.getRemoteAddr(conn)
@@ -261,38 +265,44 @@ func (fc *TCPForwardConnector) processForwardMessage(message []byte) {
 
 	msgType := binary.BigEndian.Uint32(message[:4])
 
+	logger.Info(fmt.Sprintf("[DEBUG] TCP Forward received message: type=%d len=%d", binary.BigEndian.Uint32(message[:4]), len(message)))
+
 	switch msgType {
 	case 1: // firstBlood
+		logger.Info("[DEBUG] TCP Forward processing firstBlood")
 		if len(message) < 5 {
-			logger.Error("FirstBlood message too short in forward TCP")
+			logger.Error("[DEBUG] FirstBlood message too short in forward TCP")
 			break
 		}
 
 		msg := message[4:]
 		if len(msg) == 0 {
-			logger.Error("Empty FirstBlood payload in forward TCP")
+			logger.Error("[DEBUG] Empty FirstBlood payload in forward TCP")
 			break
 		}
+		logger.Info(fmt.Sprintf("[DEBUG] TCP Forward firstBlood payload length: %d", len(msg)))
 
 		tmpMetainfo, err := encrypt.DecodeBase64(msg)
 		if err != nil {
-			logger.Error("DecodeBase64 failed in forward TCP:", err)
+			logger.Error("[DEBUG] DecodeBase64 failed in forward TCP:", err)
 			break
 		}
+		logger.Info(fmt.Sprintf("[DEBUG] TCP Forward base64 decoded: %d bytes", len(tmpMetainfo)))
 
 		metainfo, err := encrypt.DecryptNormal(tmpMetainfo)
 		if err != nil {
-			logger.Error("Decrypt failed in forward TCP:", err)
+			logger.Error("[DEBUG] DecryptNormal failed in forward TCP:", err)
 			break
 		}
+		logger.Info(fmt.Sprintf("[DEBUG] TCP Forward DecryptNormal success: %d bytes", len(metainfo)))
 
-		// 验证metainfo长度
 		if len(metainfo) < 9 {
-			logger.Error("Metainfo too short in forward TCP:", len(metainfo))
+			logger.Error(fmt.Sprintf("[DEBUG] Metainfo too short in forward TCP: %d", len(metainfo)))
 			break
 		}
 
 		uid := encrypt.BytesToMD5(metainfo)
+		logger.Info(fmt.Sprintf("[DEBUG] TCP Forward firstBlood UID: %s", uid))
 
 		// 更新客户端UID
 		oldUID := fc.client.UID
@@ -800,30 +810,31 @@ func (fc *TCPForwardConnector) reconnect() {
 		fc.reconnectMu.Unlock()
 	}()
 
-	logger.Info(fmt.Sprintf("Starting TCP reconnection process for forward client (attempt %d/%d)...",
-		fc.retryCount+1, fc.Config.MaxRetries))
+	startAttempt := fc.retryCount + 1
+	if startAttempt > fc.Config.MaxRetries {
+		return
+	}
 
-	for attempt := 1; attempt <= fc.Config.MaxRetries; attempt++ {
+	logger.Info(fmt.Sprintf("Starting TCP reconnection process for forward client (attempt %d/%d)...",
+		startAttempt, fc.Config.MaxRetries))
+
+	for attempt := startAttempt; attempt <= fc.Config.MaxRetries; attempt++ {
 		select {
 		case <-fc.stopReconnect:
 			logger.Info("TCP reconnection stopped by user for forward client")
 			return
 		default:
-			// 更新重试计数
 			fc.retryCount = attempt
 
 			logger.Info(fmt.Sprintf("Attempting to reconnect TCP forward client (attempt %d/%d)...",
 				attempt, fc.Config.MaxRetries))
 
-			// 等待重试延迟（第一次尝试前等待）
-			if attempt > 1 {
+			if attempt > startAttempt {
 				time.Sleep(fc.Config.RetryDelay)
 			}
 
-			// 尝试重新连接
 			err := fc.attemptReconnect()
 			if err == nil {
-				// 连接成功，重置计数器
 				fc.retryCount = 0
 				logger.Info("TCP forward client reconnected successfully")
 				return
@@ -831,10 +842,12 @@ func (fc *TCPForwardConnector) reconnect() {
 
 			logger.Warn(fmt.Sprintf("TCP reconnection attempt %d failed: %v", attempt, err))
 
-			// 如果是最后一次尝试，记录错误并返回
 			if attempt == fc.Config.MaxRetries {
 				logger.Error(fmt.Sprintf("Max TCP reconnection attempts (%d) reached for forward client. Giving up.",
 					fc.Config.MaxRetries))
+				if fc.client != nil && !fc.client.IsClosed {
+					fc.client.Close()
+				}
 				return
 			}
 		}
@@ -901,14 +914,13 @@ func (fc *TCPForwardConnector) attemptReconnect() error {
 
 // startReconnectListener 启动重连监听
 func (fc *TCPForwardConnector) startReconnectListener() {
-	// 监听客户端的关闭状态
 	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
 
 	for {
 		select {
 		case <-ticker.C:
-			if fc.client != nil && fc.client.IsClosed && fc.Config.Reconnect {
+			if fc.client != nil && fc.client.IsClosed && fc.shouldReconnect() {
 				fc.handleDisconnect()
 			}
 		case <-fc.stopReconnect:

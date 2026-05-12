@@ -152,12 +152,20 @@ func (fc *ForwardConnector) Connect() (*WSClient, error) {
 	var conn *websocket.Conn
 	var err error
 
-	// 根据配置选择连接方式
+	logger.Info("[DEBUG] WebSocket Forward connecting to:", fc.Config.ServerURL)
+
 	if fc.Config.Socks5Proxy != "" {
+		logger.Info("[DEBUG] WebSocket Forward using SOCKS5 proxy:", fc.Config.Socks5Proxy)
 		conn, err = fc.connectWithProxy()
 	} else {
 		conn, err = fc.connectDirect()
 	}
+
+	if err != nil {
+		logger.Error("[DEBUG] WebSocket Forward connect FAILED:", err)
+		return nil, err
+	}
+	logger.Info("[DEBUG] WebSocket Forward connected to:", fc.Config.ServerURL)
 
 	if err != nil {
 		return nil, err
@@ -295,38 +303,44 @@ func (fc *ForwardConnector) forwardMessageToHandler(message []byte) {
 	msgTypeBytes := message[:4]
 	msgType := binary.BigEndian.Uint32(msgTypeBytes)
 
+	logger.Info(fmt.Sprintf("[DEBUG] WebSocket Forward received message: type=%d len=%d", msgType, len(message)))
+
 	switch msgType {
 	case 1: // firstBlood
-		if len(message) < 5 { // 至少需要类型+1字节数据
-			logger.Error("FirstBlood message too short")
+		logger.Info("[DEBUG] WebSocket Forward processing firstBlood")
+		if len(message) < 5 {
+			logger.Error("[DEBUG] WebSocket FirstBlood message too short")
 			break
 		}
 
 		msg := message[4:]
 		if len(msg) == 0 {
-			logger.Error("Empty FirstBlood payload")
+			logger.Error("[DEBUG] WebSocket Empty FirstBlood payload")
 			break
 		}
+		logger.Info(fmt.Sprintf("[DEBUG] WebSocket Forward firstBlood payload length: %d", len(msg)))
 
 		tmpMetainfo, err := encrypt.DecodeBase64(msg)
 		if err != nil {
-			logger.Error("DecodeBase64 failed:", err)
+			logger.Error("[DEBUG] WebSocket DecodeBase64 failed:", err)
 			break
 		}
+		logger.Info(fmt.Sprintf("[DEBUG] WebSocket Forward base64 decoded: %d bytes", len(tmpMetainfo)))
 
 		metainfo, err := encrypt.DecryptNormal(tmpMetainfo)
 		if err != nil {
-			logger.Error("Decrypt failed:", err)
+			logger.Error("[DEBUG] WebSocket DecryptNormal failed:", err)
 			break
 		}
+		logger.Info(fmt.Sprintf("[DEBUG] WebSocket Forward DecryptNormal success: %d bytes", len(metainfo)))
 
-		// 验证metainfo长度
 		if len(metainfo) < 9 {
-			logger.Error("Metainfo too short:", len(metainfo))
+			logger.Error(fmt.Sprintf("[DEBUG] WebSocket Metainfo too short: %d", len(metainfo)))
 			break
 		}
 
 		uid := encrypt.BytesToMD5(metainfo)
+		logger.Info(fmt.Sprintf("[DEBUG] WebSocket Forward firstBlood UID: %s", uid))
 
 		// 更新客户端UID
 		oldUID := fc.client.UID
@@ -842,7 +856,6 @@ func (fc *ForwardConnector) shouldReconnect() bool {
 }
 
 // reconnect 重新连接
-// reconnect 重新连接 - 修复版
 func (fc *ForwardConnector) reconnect() {
 	defer func() {
 		fc.reconnectMu.Lock()
@@ -850,30 +863,31 @@ func (fc *ForwardConnector) reconnect() {
 		fc.reconnectMu.Unlock()
 	}()
 
-	logger.Info(fmt.Sprintf("Starting reconnection process for forward client (attempt %d/%d)...",
-		fc.retryCount+1, fc.Config.MaxRetries))
+	startAttempt := fc.retryCount + 1
+	if startAttempt > fc.Config.MaxRetries {
+		return
+	}
 
-	for attempt := 1; attempt <= fc.Config.MaxRetries; attempt++ {
+	logger.Info(fmt.Sprintf("Starting reconnection process for forward client (attempt %d/%d)...",
+		startAttempt, fc.Config.MaxRetries))
+
+	for attempt := startAttempt; attempt <= fc.Config.MaxRetries; attempt++ {
 		select {
 		case <-fc.stopReconnect:
 			logger.Info("Reconnection stopped by user for forward client")
 			return
 		default:
-			// 更新重试计数
 			fc.retryCount = attempt
 
 			logger.Info(fmt.Sprintf("Attempting to reconnect forward client (attempt %d/%d)...",
 				attempt, fc.Config.MaxRetries))
 
-			// 等待重试延迟（第一次尝试前等待）
-			if attempt > 1 {
+			if attempt > startAttempt {
 				time.Sleep(fc.Config.RetryDelay)
 			}
 
-			// 尝试重新连接
 			err := fc.attemptReconnect()
 			if err == nil {
-				// 连接成功，重置计数器
 				fc.retryCount = 0
 				logger.Info("Forward client reconnected successfully")
 				return
@@ -881,10 +895,12 @@ func (fc *ForwardConnector) reconnect() {
 
 			logger.Warn(fmt.Sprintf("Reconnection attempt %d failed: %v", attempt, err))
 
-			// 如果是最后一次尝试，记录错误并返回
 			if attempt == fc.Config.MaxRetries {
 				logger.Error(fmt.Sprintf("Max reconnection attempts (%d) reached for forward client. Giving up.",
 					fc.Config.MaxRetries))
+				if fc.client != nil && !fc.client.IsClosed {
+					fc.client.Close()
+				}
 				return
 			}
 		}
@@ -949,14 +965,13 @@ func (fc *ForwardConnector) attemptReconnect() error {
 
 // startReconnectListener 启动重连监听
 func (fc *ForwardConnector) startReconnectListener() {
-	// 监听客户端的关闭状态
 	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
 
 	for {
 		select {
 		case <-ticker.C:
-			if fc.client != nil && fc.client.IsClosed && fc.Config.Reconnect {
+			if fc.client != nil && fc.client.IsClosed && fc.shouldReconnect() {
 				fc.handleDisconnect()
 			}
 		case <-fc.stopReconnect:

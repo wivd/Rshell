@@ -103,20 +103,16 @@ func (fc *TCPForwardConnector) Connect() (*TCPClient, error) {
 	var conn net.Conn
 	var err error
 
-	logger.Info("[DEBUG] TCP Forward connecting to:", fc.Config.ServerAddress)
 
 	if fc.Config.Socks5Proxy != "" {
-		logger.Info("[DEBUG] TCP Forward using SOCKS5 proxy:", fc.Config.Socks5Proxy)
 		conn, err = fc.connectWithProxy()
 	} else {
 		conn, err = fc.connectDirect()
 	}
 
 	if err != nil {
-		logger.Error("[DEBUG] TCP Forward connect FAILED:", err)
 		return nil, err
 	}
-	logger.Info("[DEBUG] TCP Forward connected to:", fc.Config.ServerAddress)
 
 	// 获取对方的IP地址
 	remoteAddr := fc.getRemoteAddr(conn)
@@ -265,44 +261,33 @@ func (fc *TCPForwardConnector) processForwardMessage(message []byte) {
 
 	msgType := binary.BigEndian.Uint32(message[:4])
 
-	logger.Info(fmt.Sprintf("[DEBUG] TCP Forward received message: type=%d len=%d", binary.BigEndian.Uint32(message[:4]), len(message)))
 
 	switch msgType {
 	case 1: // firstBlood
-		logger.Info("[DEBUG] TCP Forward processing firstBlood")
 		if len(message) < 5 {
-			logger.Error("[DEBUG] FirstBlood message too short in forward TCP")
 			break
 		}
 
 		msg := message[4:]
 		if len(msg) == 0 {
-			logger.Error("[DEBUG] Empty FirstBlood payload in forward TCP")
 			break
 		}
-		logger.Info(fmt.Sprintf("[DEBUG] TCP Forward firstBlood payload length: %d", len(msg)))
 
 		tmpMetainfo, err := encrypt.DecodeBase64(msg)
 		if err != nil {
-			logger.Error("[DEBUG] DecodeBase64 failed in forward TCP:", err)
 			break
 		}
-		logger.Info(fmt.Sprintf("[DEBUG] TCP Forward base64 decoded: %d bytes", len(tmpMetainfo)))
 
 		metainfo, err := encrypt.DecryptNormal(tmpMetainfo)
 		if err != nil {
-			logger.Error("[DEBUG] DecryptNormal failed in forward TCP:", err)
 			break
 		}
-		logger.Info(fmt.Sprintf("[DEBUG] TCP Forward DecryptNormal success: %d bytes", len(metainfo)))
 
 		if len(metainfo) < 9 {
-			logger.Error(fmt.Sprintf("[DEBUG] Metainfo too short in forward TCP: %d", len(metainfo)))
 			break
 		}
 
 		uid := encrypt.BytesToMD5(metainfo)
-		logger.Info(fmt.Sprintf("[DEBUG] TCP Forward firstBlood UID: %s", uid))
 
 		// 更新客户端UID
 		oldUID := fc.client.UID

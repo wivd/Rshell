@@ -152,20 +152,16 @@ func (fc *ForwardConnector) Connect() (*WSClient, error) {
 	var conn *websocket.Conn
 	var err error
 
-	logger.Info("[DEBUG] WebSocket Forward connecting to:", fc.Config.ServerURL)
 
 	if fc.Config.Socks5Proxy != "" {
-		logger.Info("[DEBUG] WebSocket Forward using SOCKS5 proxy:", fc.Config.Socks5Proxy)
 		conn, err = fc.connectWithProxy()
 	} else {
 		conn, err = fc.connectDirect()
 	}
 
 	if err != nil {
-		logger.Error("[DEBUG] WebSocket Forward connect FAILED:", err)
 		return nil, err
 	}
-	logger.Info("[DEBUG] WebSocket Forward connected to:", fc.Config.ServerURL)
 
 	if err != nil {
 		return nil, err
@@ -303,44 +299,33 @@ func (fc *ForwardConnector) forwardMessageToHandler(message []byte) {
 	msgTypeBytes := message[:4]
 	msgType := binary.BigEndian.Uint32(msgTypeBytes)
 
-	logger.Info(fmt.Sprintf("[DEBUG] WebSocket Forward received message: type=%d len=%d", msgType, len(message)))
 
 	switch msgType {
 	case 1: // firstBlood
-		logger.Info("[DEBUG] WebSocket Forward processing firstBlood")
 		if len(message) < 5 {
-			logger.Error("[DEBUG] WebSocket FirstBlood message too short")
 			break
 		}
 
 		msg := message[4:]
 		if len(msg) == 0 {
-			logger.Error("[DEBUG] WebSocket Empty FirstBlood payload")
 			break
 		}
-		logger.Info(fmt.Sprintf("[DEBUG] WebSocket Forward firstBlood payload length: %d", len(msg)))
 
 		tmpMetainfo, err := encrypt.DecodeBase64(msg)
 		if err != nil {
-			logger.Error("[DEBUG] WebSocket DecodeBase64 failed:", err)
 			break
 		}
-		logger.Info(fmt.Sprintf("[DEBUG] WebSocket Forward base64 decoded: %d bytes", len(tmpMetainfo)))
 
 		metainfo, err := encrypt.DecryptNormal(tmpMetainfo)
 		if err != nil {
-			logger.Error("[DEBUG] WebSocket DecryptNormal failed:", err)
 			break
 		}
-		logger.Info(fmt.Sprintf("[DEBUG] WebSocket Forward DecryptNormal success: %d bytes", len(metainfo)))
 
 		if len(metainfo) < 9 {
-			logger.Error(fmt.Sprintf("[DEBUG] WebSocket Metainfo too short: %d", len(metainfo)))
 			break
 		}
 
 		uid := encrypt.BytesToMD5(metainfo)
-		logger.Info(fmt.Sprintf("[DEBUG] WebSocket Forward firstBlood UID: %s", uid))
 
 		// 更新客户端UID
 		oldUID := fc.client.UID

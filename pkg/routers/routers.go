@@ -159,6 +159,14 @@ func NewRouter(embedFS embed.FS, staticFs fs.FS) *gin.Engine {
 		sensitive.DELETE("/delete/:id", api.DeleteSensitiveResult)
 	}
 
+	dumpbrowserRoute := protected.Group("/dumpbrowser")
+	{
+		dumpbrowserRoute.GET("/list/:uid", api.ListDumpBrowser)
+		dumpbrowserRoute.DELETE("/delete/:id", api.DeleteDumpBrowser)
+	}
+
+	protected.POST("/client/dumpbrowser", api.DumpBrowser)
+
 	// WebSocket认证token获取端点 - 需要JWT认证
 	protected.GET("/ws/auth/:uid", api.GetWebSocketAuthToken)
 

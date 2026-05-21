@@ -51,20 +51,6 @@ type InteractiveSession struct {
 	CloseHandler   func(uid, sessionID string)
 }
 
-func (s *InteractiveSession) WritePump() {
-	for {
-		select {
-		case msg := <-s.sendChan:
-			s.BrowserConn.SetWriteDeadline(time.Now().Add(10 * time.Second))
-			if err := s.BrowserConn.WriteMessage(websocket.TextMessage, msg); err != nil {
-				return
-			}
-		case <-s.CloseChan:
-			return
-		}
-	}
-}
-
 // GetOrCreateSession 创建或获取会话
 func (sm *SessionManager) GetOrCreateSession(sessionID, uid string, conn *websocket.Conn) *InteractiveSession {
 	sm.mu.Lock()
@@ -85,6 +71,7 @@ func (sm *SessionManager) GetOrCreateSession(sessionID, uid string, conn *websoc
 		OutputQueue: make(chan []byte, 100),
 		InputQueue:  make(chan []byte, 100),
 		CloseChan:   make(chan struct{}),
+		sendChan:    make(chan []byte, 100),
 		Connected:   true,
 	}
 
@@ -226,22 +213,24 @@ func (s *InteractiveSession) forwardOutputToBrowser() {
 }
 
 func (s *InteractiveSession) SendToBrowser(data map[string]interface{}) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
-	if s.BrowserConn == nil || !s.Connected {
-		return
-	}
-
-	// 关键：设置写超时，避免WriteMessage阻塞
-	if err := s.BrowserConn.SetWriteDeadline(time.Now().Add(10 * time.Second)); err != nil {
-		logger.Error("设置写超时失败: %v", err)
-		return
-	}
-
 	jsonData, _ := json.Marshal(data)
-	if err := s.BrowserConn.WriteMessage(websocket.TextMessage, jsonData); err != nil {
-		logger.Error("发送消息到浏览器失败: %v", err)
+	select {
+	case s.sendChan <- jsonData:
+	case <-time.After(3 * time.Second):
+	}
+}
+
+func (s *InteractiveSession) WritePump() {
+	for {
+		select {
+		case msg := <-s.sendChan:
+			s.BrowserConn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+			if err := s.BrowserConn.WriteMessage(websocket.TextMessage, msg); err != nil {
+				return
+			}
+		case <-s.CloseChan:
+			return
+		}
 	}
 }
 

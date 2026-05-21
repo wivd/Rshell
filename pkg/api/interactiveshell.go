@@ -181,18 +181,17 @@ func InteractiveShell(c *gin.Context) {
 		for {
 			select {
 			case <-ticker.C:
-				conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
-				if err := conn.WriteMessage(websocket.PingMessage, nil); err != nil {
-					return
-				}
+				session.SendToBrowser(map[string]interface{}{
+					"type": "ping",
+				})
 			case <-session.CloseChan:
 				return
 			}
 		}
 	}()
 
-	// 立即发送认证成功消息
-	conn.WriteJSON(map[string]interface{}{
+	// 立即发送认证成功消息（走 sendChan，避免并发写）
+	session.SendToBrowser(map[string]interface{}{
 		"type":    "auth_response",
 		"success": true,
 		"message": "认证成功",

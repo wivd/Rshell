@@ -144,7 +144,8 @@ func generateInitialAdminPassword(length int) (string, error) {
 		length = 20
 	}
 
-	const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%^&*_-+="
+	// 仅使用字母数字，避免 shell 特殊字符导致命令行参数解析异常
+	const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789"
 	buf := make([]byte, length)
 	randomBytes := make([]byte, length)
 

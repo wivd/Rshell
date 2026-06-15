@@ -39,7 +39,13 @@ func GenServer(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "未找到匹配的服务端文件"})
 		return
 	}
-	binaryData, err := embeddedFiles.ReadFile("server/" + listenerType + "/" + binaryFileName)
+
+	// HTTPS 复用 HTTP 的客户端二进制
+	serverDir := listenerType
+	if serverDir == "https" {
+		serverDir = "http"
+	}
+	binaryData, err := embeddedFiles.ReadFile("server/" + serverDir + "/" + binaryFileName)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "读取文件失败: " + err.Error()})
 		return
@@ -61,10 +67,16 @@ func GenServer(c *gin.Context) {
 		modifiedData = bytes.ReplaceAll(binaryData, []byte(oldStr), []byte(newStr))
 
 	} else {
-		// 替换文件中的特定字符串
-		oldStr := "HOSTAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" // 要替换的字符串
-		newStr := strings.ReplaceAll(connectAddress, " ", "")                // 替换为的字符串
-		newStr = padRight(newStr, len(oldStr))
+		// 将 HOST 占位符替换为完整 URL（含协议），确保二进制补丁可靠
+		// Go 编译器将字符串字面量连续存放在二进制中，bytes.ReplaceAll 可以精确匹配
+		oldStr := "HOSTAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+		var fullURL string
+		if listenerType == "https" {
+			fullURL = "https://" + strings.ReplaceAll(connectAddress, " ", "")
+		} else {
+			fullURL = "http://" + strings.ReplaceAll(connectAddress, " ", "")
+		}
+		newStr := padRight(fullURL, len(oldStr))
 
 		modifiedData = bytes.ReplaceAll(binaryData, []byte(oldStr), []byte(newStr))
 	}
@@ -89,7 +101,12 @@ func GenServer(c *gin.Context) {
 	c.Writer.Write(modifiedData)
 }
 func findBinary(listenerType, osType, archType string) string {
-	entries, err := embeddedFiles.ReadDir("server/" + listenerType)
+	// HTTPS 监听器复用 HTTP 客户端二进制（客户端已支持 https:// 协议）
+	dir := listenerType
+	if dir == "https" {
+		dir = "http"
+	}
+	entries, err := embeddedFiles.ReadDir("server/" + dir)
 	if err != nil {
 		logger.Error("读取嵌入目录失败: %v\n", err)
 		return ""

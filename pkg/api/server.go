@@ -67,14 +67,17 @@ func GenServer(c *gin.Context) {
 		modifiedData = bytes.ReplaceAll(binaryData, []byte(oldStr), []byte(newStr))
 
 	} else {
-		// 将 HOST 占位符替换为完整 URL（含协议），确保二进制补丁可靠
+		// 将 HOST 占位符替换为实际连接地址
 		// Go 编译器将字符串字面量连续存放在二进制中，bytes.ReplaceAll 可以精确匹配
 		oldStr := "HOSTAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
 		var fullURL string
 		if listenerType == "https" {
 			fullURL = "https://" + strings.ReplaceAll(connectAddress, " ", "")
-		} else {
+		} else if listenerType == "http" {
 			fullURL = "http://" + strings.ReplaceAll(connectAddress, " ", "")
+		} else {
+			// WebSocket/TCP/KCP 只需 IP:Port，无需加 http:// 前缀
+			fullURL = strings.ReplaceAll(connectAddress, " ", "")
 		}
 		newStr := padRight(fullURL, len(oldStr))
 
